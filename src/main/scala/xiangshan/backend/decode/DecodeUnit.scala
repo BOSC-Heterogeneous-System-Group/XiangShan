@@ -25,6 +25,7 @@ import utils._
 import xiangshan.ExceptionNO.illegalInstr
 import xiangshan._
 import freechips.rocketchip.rocket.Instructions._
+//import xiangshan.backend.decode.isa.matdecode.MATInstructions._
 
 /**
  * Abstract trait giving defaults and other relevant values to different Decode constants/
@@ -437,6 +438,14 @@ object CBODecode extends DecodeConstants {
 /**
  * XiangShan Trap Decode constants
  */
+object MatrixDecode extends DecodeConstants{
+  def MADD = BitPat("b0000000_?????_?????_000_?????_0101011")
+
+  val table: Array[(BitPat, List[BitPat])] = Array(
+    MADD -> List(SrcType.reg, SrcType.reg, SrcType.X, FuType.matu, MATUOpType.madd, Y, N, N, N, N, N, SelImm.X)
+  )
+}
+
 object XSTrapDecode extends DecodeConstants {
   def TRAP = BitPat("b000000000000?????000000001101011")
   val table: Array[(BitPat, List[BitPat])] = Array(
@@ -584,7 +593,8 @@ class DecodeUnit(implicit p: Parameters) extends XSModule with DecodeUnitConstan
     XSTrapDecode.table ++
     BDecode.table ++
     CBODecode.table ++
-    SvinvalDecode.table
+    SvinvalDecode.table ++
+    MatrixDecode.table
   // assertion for LUI: only LUI should be assigned `selImm === SelImm.IMM_U && fuType === FuType.alu`
   val luiMatch = (t: Seq[BitPat]) => t(3).value == FuType.alu.litValue && t.reverse.head.value == SelImm.IMM_U.litValue
   val luiTable = decode_table.filter(t => luiMatch(t._2)).map(_._1).distinct

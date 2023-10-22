@@ -36,13 +36,13 @@ class RefCounter(size: Int)(implicit p: Parameters) extends XSModule {
   // recording referenced times of each physical registers
   // refCounter: increase at rename; decrease at walk/commit
   // Originally 0-31 registers have counters of ones.
-  val refCounter = RegInit(VecInit.fill(size)(0.U(IntRefCounterWidth.W)))
+  val refCounter = RegInit(VecInit.fill(size)(0.U(IntRefCounterWidth.W)))  //每一个物理寄存器都分配一个计数器
   val refCounterInc = WireInit(refCounter)
   val refCounterDec = WireInit(refCounter)
   val refCounterNext = WireInit(refCounter)
 
   // One-hot Encoding for allocation and de-allocation
-  val allocateOH = allocate.map(alloc => UIntToOH(alloc.bits))
+  val allocateOH = allocate.map(alloc => UIntToOH(alloc.bits))            //独热码
   val deallocateOH = deallocate.map(dealloc => UIntToOH(dealloc.bits))
 
   /**
@@ -50,11 +50,11 @@ class RefCounter(size: Int)(implicit p: Parameters) extends XSModule {
     */
   for ((de, i) <- deallocate.zipWithIndex) {
     val isNonZero = de.valid && refCounter(de.bits) =/= 0.U
-    val hasDuplicate = deallocate.take(i).map(de => de.valid && de.bits === deallocate(i).bits)
+    val hasDuplicate = deallocate.take(i).map(de => de.valid && de.bits === deallocate(i).bits) //与至少一个deallocate(i)相同
     val blockedByDup = if (i == 0) false.B else VecInit(hasDuplicate).asUInt.orR
     val isFreed = refCounter(de.bits) + refCounterInc(de.bits) === refCounterDec(de.bits)
-    io.freeRegs(i).valid := RegNext(isNonZero && !blockedByDup) && RegNext(isFreed)
-    val isFreed1 = refCounter(RegNext(de.bits)) === 0.U
+    io.freeRegs(i).valid := RegNext(isNonZero && !blockedByDup) && RegNext(isFreed) //该物理寄存器refCounter不为零且前面没有与它重复的引用
+    val isFreed1 = refCounter(RegNext(de.bits)) === 0.U //下一拍，isFreed变成0
     XSError(RegNext(isFreed) =/= isFreed1, p"why isFreed ${RegNext(isFreed)} $isFreed1\n")
     io.freeRegs(i).bits := RegNext(deallocate(i).bits)
   }

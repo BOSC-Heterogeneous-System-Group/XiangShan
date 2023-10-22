@@ -50,6 +50,7 @@ case class RSParams
   var isStoreData: Boolean = false,
   var isMul: Boolean = false,
   var isLoad: Boolean = false,
+  var isMatu: Boolean = false,
   var exuCfg: Option[ExuConfig] = None
 ){
   def allWakeup: Int = numFastWakeup + numWakeup
@@ -88,6 +89,7 @@ class ReservationStationWrapper(implicit p: Parameters) extends LazyModule with 
       case StdExeUnitCfg => params.isStoreData = true
       case MulDivExeUnitCfg => params.isMul = true
       case LdExeUnitCfg => params.isLoad = true
+      case MatuExeUnitCfg => params.isMatu = true
       case _ =>
     }
     // TODO: why jump needs two sources?
@@ -157,6 +159,7 @@ class ReservationStationWrapper(implicit p: Parameters) extends LazyModule with 
     if (params.isStoreData) rs.zipWithIndex.foreach { case (rs, index) => rs.suggestName(s"stdRS_${index}") }
     if (params.isMul)       rs.zipWithIndex.foreach { case (rs, index) => rs.suggestName(s"mulRS_${index}") }
     if (params.isLoad)      rs.zipWithIndex.foreach { case (rs, index) => rs.suggestName(s"loadRS_${index}") }
+    if (params.isMatu)      rs.zipWithIndex.foreach { case (rs, index) => rs.suggestName(s"matuRS_${index}")}
 
     val updatedP = p.alter((site, here, up) => {
       case XSCoreParamsKey => up(XSCoreParamsKey).copy(

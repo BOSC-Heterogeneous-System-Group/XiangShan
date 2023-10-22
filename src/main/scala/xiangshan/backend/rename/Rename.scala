@@ -38,13 +38,19 @@ class Rename(implicit p: Parameters) extends XSModule with HasPerfEvents {
     // waittable read result
     val waittable = Flipped(Vec(RenameWidth, Output(Bool())))
     // to rename table
-    val intReadPorts = Vec(RenameWidth, Vec(3, Input(UInt(PhyRegIdxWidth.W))))
+    val intReadPorts = Vec(RenameWidth, Vec(3, Input(UInt(PhyRegIdxWidth.W))))  //readport有三个是因为还要以目的寄存器为地址读取ROB中存储的之前的映射关系
     val fpReadPorts = Vec(RenameWidth, Vec(4, Input(UInt(PhyRegIdxWidth.W))))
     val intRenamePorts = Vec(RenameWidth, Output(new RatWritePort))
     val fpRenamePorts = Vec(RenameWidth, Output(new RatWritePort))
-    // to dispatch1
+    // to dispatch1, 有的是有的不一定
     val out = Vec(RenameWidth, DecoupledIO(new MicroOp))
   })
+
+  //(1)对于不存在引用计数的情况，当发生 ROB 回滚时，FreeList 中释放的空闲寄存器一定是前面恰好被分配出的那一些，
+  //   且与回滚指令中需要分配新物理寄存器的数量相同。在种情况下，FreeList 的存储不需要被重复写入，
+  //   只需要将出队指针往前回滚即可
+  //(2)对于存在引用计数的情况，由于重复引用情况的存在（不需要通过 FreeList 分配，而是增加一个物理寄存器的引用计数），
+  //   回滚的物理寄存器数量与 FreeList 的释放数量并不一定相同。
 
   // create free list and rat
   val intFreeList = Module(new MEFreeList(NRPhyRegs))
@@ -124,9 +130,9 @@ class Rename(implicit p: Parameters) extends XSModule with HasPerfEvents {
 
     // alloc a new phy reg
     needFpDest(i) := io.in(i).valid && needDestReg(fp = true, io.in(i).bits)
-    needIntDest(i) := io.in(i).valid && needDestReg(fp = false, io.in(i).bits)
+    needIntDest(i) := io.in(i).valid && needDestReg(fp = false, io.in(i).bits)  //判定是否需要目的寄存器
     fpFreeList.io.allocateReq(i) := needFpDest(i)
-    intFreeList.io.allocateReq(i) := needIntDest(i) && !isMove(i)
+    intFreeList.io.allocateReq(i) := needIntDest(i) && !isMove(i) //根据是否需要目的寄存器分配freelist中的物理寄存器
 
     // no valid instruction from decode stage || all resources (dispatch1 + both free lists) ready
     io.in(i).ready := !hasValid || canOut
@@ -148,7 +154,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasPerfEvents {
     uops(i).eliminatedMove := isMove(i)
 
     // update pdest
-    uops(i).pdest := Mux(needIntDest(i), intFreeList.io.allocatePhyReg(i), // normal int inst
+    uops(i).pdest := Mux(needIntDest(i), intFreeList.io.allocatePhyReg(i), // normal int inst, 在这里分配PhyReg
       // normal fp inst
       Mux(needFpDest(i), fpFreeList.io.allocatePhyReg(i),
         /* default */0.U))
@@ -176,7 +182,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasPerfEvents {
     fpSpecWen(i) := needFpDest(i) && fpFreeList.io.canAllocate && fpFreeList.io.doAllocate && !io.robCommits.isWalk && !io.redirect.valid
 
     intRefCounter.io.allocate(i).valid := intSpecWen(i)
-    intRefCounter.io.allocate(i).bits := io.out(i).bits.pdest
+    intRefCounter.io.allocate(i).bits := io.out(i).bits.pdest // 给refcounter发送pdest，在Freelist分配完pdest之后
   }
 
   /**
@@ -184,7 +190,7 @@ class Rename(implicit p: Parameters) extends XSModule with HasPerfEvents {
     * - bypass the pdest to psrc if previous instructions write to the same ldest as lsrc
     * - default: psrc from RAT
     * How to set pdest:
-    * - Mux(isMove, psrc, pdest_from_freelist).
+    * - Mux(isMove, psrc, pdest_from_freelist). 是否是move指令
     *
     * The critical path of rename lies here:
     * When move elimination is enabled, we need to update the rat with psrc.
@@ -200,22 +206,23 @@ class Rename(implicit p: Parameters) extends XSModule with HasPerfEvents {
     *                           freelist_out(N))
     */
   // a simple functional model for now
-  io.out(0).bits.pdest := Mux(isMove(0), uops(0).psrc.head, uops(0).pdest)
-  val bypassCond = Wire(Vec(4, MixedVec(List.tabulate(RenameWidth-1)(i => UInt((i+1).W)))))
+  io.out(0).bits.pdest := Mux(isMove(0), uops(0).psrc.head, uops(0).pdest)  // renamewidth里面的第0个
+  val bypassCond = Wire(Vec(4, MixedVec(List.tabulate(RenameWidth-1)(i => UInt((i+1).W))))) //创建一个二维向量
   for (i <- 1 until RenameWidth) {
-    val fpCond = io.in(i).bits.ctrl.srcType.map(_ === SrcType.fp) :+ needFpDest(i)
-    val intCond = io.in(i).bits.ctrl.srcType.map(_ === SrcType.reg) :+ needIntDest(i)
+    val fpCond = io.in(i).bits.ctrl.srcType.map(_ === SrcType.fp) :+ needFpDest(i)      //浮点情况
+    val intCond = io.in(i).bits.ctrl.srcType.map(_ === SrcType.reg) :+ needIntDest(i)   //整型情况
     val target = io.in(i).bits.ctrl.lsrc :+ io.in(i).bits.ctrl.ldest
     for ((((cond1, cond2), t), j) <- fpCond.zip(intCond).zip(target).zipWithIndex) {
-      val destToSrc = io.in.take(i).zipWithIndex.map { case (in, j) =>
+      val destToSrc = io.in.take(i).zipWithIndex.map { case (in, j) => //取的是前i个元素，0到i-1，
         val indexMatch = in.bits.ctrl.ldest === t
         val writeMatch =  cond2 && needIntDest(j) || cond1 && needFpDest(j)
         indexMatch && writeMatch
       }
-      bypassCond(j)(i - 1) := VecInit(destToSrc).asUInt
+      bypassCond(j)(i - 1) := VecInit(destToSrc).asUInt // RenameWidth行, j列，看的是前面的dest是否有到src的bypass 即RAW
     }
     io.out(i).bits.psrc(0) := io.out.take(i).map(_.bits.pdest).zip(bypassCond(0)(i-1).asBools).foldLeft(uops(i).psrc(0)) {
-      (z, next) => Mux(next._2, next._1, z)
+      (z, next) => Mux(next._2, next._1, z) //首先将bits.pdest和bypassCond对应上，pdest是前i个pdest，bypassCond(0)(i-1)是看前i个pdest与这个psrc是否有匹配情况
+                                            //有的话，就把pdest赋值给psrc(0)
     }
     io.out(i).bits.psrc(1) := io.out.take(i).map(_.bits.pdest).zip(bypassCond(1)(i-1).asBools).foldLeft(uops(i).psrc(1)) {
       (z, next) => Mux(next._2, next._1, z)

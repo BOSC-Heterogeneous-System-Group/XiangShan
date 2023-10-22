@@ -432,7 +432,7 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     renamePipe.ready := rename.io.in(i).ready
     rename.io.in(i).valid := renamePipe.valid && !fusionDecoder.io.clear(i)
     rename.io.in(i).bits := renamePipe.bits
-    rename.io.intReadPorts(i) := rat.io.intReadPorts(i).map(_.data)
+    rename.io.intReadPorts(i) := rat.io.intReadPorts(i).map(_.data) // 把RAT读到的数据给回到rename
     rename.io.fpReadPorts(i) := rat.io.fpReadPorts(i).map(_.data)
     rename.io.waittable(i) := RegEnable(waittable.io.rdata(i), decode.io.out(i).fire)
 

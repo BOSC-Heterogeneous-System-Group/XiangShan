@@ -62,15 +62,21 @@ class RenameTable(float: Boolean)(implicit p: Parameters) extends XSModule {
   val t1_wSpec_addr = t1_wSpec.map(w => Mux(w.wen, UIntToOH(w.addr), 0.U))
   for ((next, i) <- spec_table_next.zipWithIndex) {
     val matchVec = t1_wSpec_addr.map(w => w(i))
+    //把地址向量里六个元素（OH）的第i位提取出来，放到matchVec中，
+    //每一次迭代产生一个向量，向量长度是6，分别代表地址是否对应这一个表项
     val wMatch = ParallelPriorityMux(matchVec.reverse, t1_wSpec.map(_.data).reverse)
+    //ParallelPriorityMux 函数的作用是根据输入序列的布尔值优先级，选择一个对应的数据值作为输出。
+    //它会遍历输入序列，找到第一个布尔值为真的元素，并返回对应的数据值。
     // When there's a flush, we use arch_table to update spec_table.
     next := Mux(VecInit(matchVec).asUInt.orR, wMatch, spec_table(i))
   }
   spec_table := spec_table_next
 
-  // READ: decode-rename stage
+  // READ: decode-rename stage, 迭代6次
+  // WData at T0 is bypassed to RData at T1.
   for ((r, i) <- io.readPorts.zipWithIndex) {
     // We use two comparisons here because r.hold has bad timing but addrs have better timing.
+    // 每一个读端口都将和所有的写端口进行比较，生成的布尔序列里面有6个元素
     val t0_bypass = io.specWritePorts.map(w => w.wen && Mux(r.hold, w.addr === t1_raddr(i), w.addr === r.addr))
     val t1_bypass = RegNext(VecInit(t0_bypass))
     val bypass_data = ParallelPriorityMux(t1_bypass.reverse, t1_wSpec.map(_.data).reverse)
@@ -116,7 +122,7 @@ class RenameTableWrapper(implicit p: Parameters) extends XSModule {
     spec.data := io.robCommits.info(i).old_pdest
     XSError(spec.wen && spec.addr === 0.U && spec.data =/= 0.U, "pdest for $0 should be 0\n")
   }
-  for ((spec, rename) <- intRat.io.specWritePorts.zip(io.intRenamePorts)) {
+  for ((spec, rename) <- intRat.io.specWritePorts.zip(io.intRenamePorts)) { //intRenamePorts留白
     when (rename.wen) {
       spec.wen  := true.B
       spec.addr := rename.addr

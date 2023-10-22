@@ -26,15 +26,15 @@ import utils._
 class MEFreeList(size: Int)(implicit p: Parameters) extends BaseFreeList(size) with HasPerfEvents {
   val freeList = RegInit(VecInit(
     // originally {1, 2, ..., size - 1} are free. Register 0-31 are mapped to x0.
-    Seq.tabulate(size - 1)(i => (i + 1).U(PhyRegIdxWidth.W)) :+ 0.U(PhyRegIdxWidth.W)))
+    Seq.tabulate(size - 1)(i => (i + 1).U(PhyRegIdxWidth.W)) :+ 0.U(PhyRegIdxWidth.W))) //从1到i+1，在末尾添加0
 
   // head and tail pointer
   val headPtr = RegInit(FreeListPtr(false, 0))
   val headPtrOH = RegInit(1.U(size.W))
   XSError(headPtr.toOH =/= headPtrOH, p"wrong one-hot reg between $headPtr and $headPtrOH")
-  val headPtrOHShift = CircularShift(headPtrOH)
+  val headPtrOHShift = CircularShift(headPtrOH) //循环左移
   // may shift [0, RenameWidth] steps
-  val headPtrOHVec = VecInit.tabulate(RenameWidth + 1)(headPtrOHShift.left)
+  val headPtrOHVec = VecInit.tabulate(RenameWidth + 1)(headPtrOHShift.left) //6个元素，每个元素都是headptrOHShift循环左移的结果
   val tailPtr = RegInit(FreeListPtr(false, size - 1))
 
   val doRename = io.canAllocate && io.doAllocate && !io.redirect && !io.walk
@@ -42,10 +42,10 @@ class MEFreeList(size: Int)(implicit p: Parameters) extends BaseFreeList(size) w
   /**
     * Allocation: from freelist (same as StdFreelist)
     */
-  val phyRegCandidates = VecInit(headPtrOHVec.map(sel => Mux1H(sel, freeList)))
+  val phyRegCandidates = VecInit(headPtrOHVec.map(sel => Mux1H(sel, freeList))) //分配给6个元素的Freelist中的候选寄存器
   for (i <- 0 until RenameWidth) {
     // enqueue instr, is move elimination
-    io.allocatePhyReg(i) := phyRegCandidates(PopCount(io.allocateReq.take(i)))
+    io.allocatePhyReg(i) := phyRegCandidates(PopCount(io.allocateReq.take(i))) //如果没有目的寄存器，则将上一个分配的物理寄存器给给到allocate PhyReg
   }
   // update head pointer
   val numAllocate = PopCount(io.allocateReq)
@@ -70,7 +70,7 @@ class MEFreeList(size: Int)(implicit p: Parameters) extends BaseFreeList(size) w
 
   val freeRegCnt = Mux(doRename, distanceBetween(tailPtrNext, headPtrNext), distanceBetween(tailPtrNext, headPtr))
   val freeRegCntReg = RegNext(freeRegCnt)
-  io.canAllocate := freeRegCntReg >= RenameWidth.U
+  io.canAllocate := freeRegCntReg >= RenameWidth.U //是否可以进行分配，空余的寄存器数量大于6才可以
 
   val perfEvents = Seq(
     ("me_freelist_1_4_valid", freeRegCntReg <  (size / 4).U                                     ),
