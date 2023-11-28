@@ -82,7 +82,7 @@ class SelectPolicy(params: RSParams)(implicit p: Parameters) extends XSModule {
 
 class OldestSelection(params: RSParams)(implicit p: Parameters) extends XSModule {
   val io = IO(new Bundle {
-    val in = Vec(params.numDeq, Flipped(ValidIO(UInt(params.numEntries.W))))
+    val in = Vec(params.numDeq, Flipped(ValidIO(UInt(params.numEntries.W)))) // 从select模块的grant来的
     val oldest = Flipped(ValidIO(UInt(params.numEntries.W)))
     val canOverride = Vec(params.numDeq, Input(Bool()))
     val isOverrided = Vec(params.numDeq, Output(Bool()))
@@ -123,7 +123,7 @@ class AgeDetector(numEntries: Int, numEnq: Int, regOut: Boolean = true)(implicit
     takePorts match {
       case 0 => false.B
       case 1 => io.enq.head(i) && !isFlushed(i)
-      case n => VecInit(io.enq.take(n).map(_(i))).asUInt.orR && !isFlushed(i)
+      case n => VecInit(io.enq.take(n).map(_(i))).asUInt.orR && !isFlushed(i) // 至少一个入队且还未出队
     }
   }
 

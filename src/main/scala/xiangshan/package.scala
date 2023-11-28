@@ -514,7 +514,7 @@ package object xiangshan {
   }
 
   object MATUOpType {
-    def madd = "b0000".U
+    def mmul = "b0000".U
   }
 
   object ExceptionNO {
@@ -625,6 +625,7 @@ package object xiangshan {
     numFpSrc = 0,
     writeIntRf = true,
     writeFpRf = false,
+    latency = UncertainLatency()
   )
 
   val jmpCfg = FuConfig(
@@ -810,5 +811,5 @@ package object xiangshan {
   val LdExeUnitCfg = ExuConfig("LoadExu", "Mem", Seq(lduCfg), wbIntPriority = 0, wbFpPriority = 0, extendsExu = false)
   val StaExeUnitCfg = ExuConfig("StaExu", "Mem", Seq(staCfg, mouCfg), wbIntPriority = Int.MaxValue, wbFpPriority = Int.MaxValue, extendsExu = false)
   val StdExeUnitCfg = ExuConfig("StdExu", "Mem", Seq(stdCfg, mouDataCfg), wbIntPriority = Int.MaxValue, wbFpPriority = Int.MaxValue, extendsExu = false)
-  val MatuExeUnitCfg = ExuConfig("MatuExeUnit", "Int", Seq(matuCfg), 0, Int.MaxValue)
+  val MatuExeUnitCfg = ExuConfig("MatuExeUnit", "Int", Seq(matuCfg), 1, Int.MaxValue)
 }

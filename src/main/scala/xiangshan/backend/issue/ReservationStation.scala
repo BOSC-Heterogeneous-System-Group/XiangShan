@@ -81,7 +81,7 @@ class ReservationStationWrapper(implicit p: Parameters) extends LazyModule with 
     params.numEntries += IssQueSize * deq
     params.numDeq = deq
     params.numSrc = max(params.numSrc, max(cfg.intSrcCnt, cfg.fpSrcCnt))
-    params.exuCfg = Some(cfg)
+    params.exuCfg = Some(cfg) // ** Schedule ports
     cfg match {
       case JumpCSRExeUnitCfg => params.isJump = true
       case AluExeUnitCfg => params.isAlu = true
@@ -144,13 +144,13 @@ class ReservationStationWrapper(implicit p: Parameters) extends LazyModule with 
       val numDeq = Seq(params.numDeq - maxRsDeq * i, maxRsDeq).min
       val numEnq = params.numEnq / numRS
       val numEntries = numDeq * params.numEntries / params.numDeq
-      val rsParam = params.copy(numEnq = numEnq, numDeq = numDeq, numEntries = numEntries)
+      val rsParam = params.copy(numEnq = numEnq, numDeq = numDeq, numEntries = numEntries) //使用新对象作为构造函数的参数
       val updatedP = p.alter((site, here, up) => {
         case XSCoreParamsKey => up(XSCoreParamsKey).copy(
           IssQueSize = numEntries
         )
       })
-      Module(new ReservationStation(rsParam)(updatedP))
+      Module(new ReservationStation(rsParam)(updatedP))  // rs是实例数组
     })
 
     if (params.isJump)      rs.zipWithIndex.foreach { case (rs, index) => rs.suggestName(s"jumpRS_${index}") }
@@ -265,6 +265,7 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   /**
     * S0: Update status (from wakeup) and schedule possible instructions to issue.
     * Instructions from dispatch will be always latched and bypassed to S1.
+    * T0 enq/wakeup T1 select/read from data array (bypass network) T2 deq
     */
   // common data
   val s0_allocatePtrOH = VecInit(select.io.allocate.map(_.bits))
@@ -279,7 +280,7 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   val validAfterAllocate = RegInit(0.U(params.numEntries.W))
   val validUpdateByAllocate = ParallelMux(s0_doEnqueue, s0_allocatePtrOH)
   validAfterAllocate := statusArray.io.isValidNext | validUpdateByAllocate
-  select.io.validVec := validAfterAllocate
+  select.io.validVec := validAfterAllocate  //将空标志标记为非空
 
   // FIXME: this allocation ready bits can be used with naive/circ selection policy only.
   val dispatchReady = Wire(Vec(params.numEnq, Bool()))
@@ -300,7 +301,7 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
       for (j <- 0 until 2) {
         val allocateThisCycle = Reg(UInt(2.W))
         allocateThisCycle := numAllocateS0 +& j.U
-        dispatchReady(2 * j + i) := emptyThisCycle > allocateThisCycle
+        dispatchReady(2 * j + i) := emptyThisCycle > allocateThisCycle  // 还有空的表项就可以入队
       }
     }
   }
@@ -626,7 +627,7 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   for (((uop, data), bypass) <- s1_dispatchUops_dup(2).map(_.bits).zip(enqReverse(io.srcRegValue)).zip(immBypassedData)) {
     val jumpPc = if (io.jump.isDefined) Some(io.jump.get.jumpPc) else None
     val jalr_target = if (io.jump.isDefined) Some(io.jump.get.jalr_target) else None
-    bypass := ImmExtractor(params, uop, data, jumpPc, jalr_target)
+    bypass := ImmExtractor(params, uop, data, jumpPc, jalr_target)  //提取立即数
   }
 
   /**
@@ -656,7 +657,7 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
       }
     }
   }
-  // data broadcast: from function units (only slow wakeup date are needed)
+  // data broadcast: from function units (only slow wakeup date are needed), save data into data array
   val broadcastValid = io.slowPorts.map(_.valid)
   val broadcastValue = VecInit(io.slowPorts.map(_.bits.data))
   require(broadcastValid.size == params.numWakeup)
@@ -782,7 +783,7 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
       XSPerfAccumulate(s"fma_partial2_issue_$i", io.deq(i).fire && io.fmaMid.get(i).waitForAdd)
       XSPerfAccumulate(s"fma_final_issue_$i", io.deq(i).fire && io.fmaMid.get(i).in.valid)
     }
-    s2_deq(i).ready := !s2_deq(i).valid || io.deq(i).ready
+    s2_deq(i).ready := !s2_deq(i).valid || io.deq(i).ready  //握手信号 valid打拍
     io.deq(i).valid := s2_deq(i).valid
     io.deq(i).bits := s2_deq(i).bits
     io.deq(i).bits.uop.debugInfo.issueTime := GTimer()

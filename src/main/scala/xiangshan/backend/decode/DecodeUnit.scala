@@ -439,10 +439,10 @@ object CBODecode extends DecodeConstants {
  * XiangShan Trap Decode constants
  */
 object MatrixDecode extends DecodeConstants{
-  def MADD = BitPat("b0000000_?????_?????_000_?????_0101011")
+  def MMUL = BitPat("b0000000_?????_?????_000_?????_0101011")
 
   val table: Array[(BitPat, List[BitPat])] = Array(
-    MADD -> List(SrcType.reg, SrcType.reg, SrcType.X, FuType.matu, MATUOpType.madd, Y, N, N, N, N, N, SelImm.X)
+    MMUL -> List(SrcType.reg, SrcType.reg, SrcType.X, FuType.matu, MATUOpType.mmul, Y, N, N, N, N, N, SelImm.X)
   )
 }
 
