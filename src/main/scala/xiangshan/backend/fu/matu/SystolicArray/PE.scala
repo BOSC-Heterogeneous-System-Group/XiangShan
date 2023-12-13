@@ -4,8 +4,7 @@ import chisel3._
 
 
 class PE_Control extends Bundle {
-  val ctrl_send_data = Bool()
-  val ctrl_stall_data = Bool()
+  val ctrl_sa_send_data = Bool()
   // TODO add bias preload control signals
 }
 
@@ -34,7 +33,7 @@ class PE(val IN_WIDTH: Int, val C_WIDTH: Int) extends Module {
   a_reg := io.in_a
   b_reg := io.in_b
 
-  c_reg := Mux(io.in_control.ctrl_stall_data === true.B, c_reg, Mux(io.in_control.ctrl_send_data === true.B, io.in_c, mac.io.out_c))
+  c_reg := Mux(io.in_control.ctrl_sa_send_data, io.in_c, mac.io.out_c)
 
   io.out_a := a_reg
   io.out_b := b_reg

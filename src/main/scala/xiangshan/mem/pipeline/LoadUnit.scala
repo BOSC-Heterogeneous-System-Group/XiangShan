@@ -496,6 +496,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
   val io = IO(new Bundle() {
     val ldin = Flipped(Decoupled(new ExuInput))
     val ldout = Decoupled(new ExuOutput)
+    val ldout_dup = Decoupled(new ExuOutput)
     val redirect = Flipped(ValidIO(new Redirect))
     val feedbackSlow = ValidIO(new RSFeedback)
     val feedbackFast = ValidIO(new RSFeedback)
@@ -528,6 +529,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
   val load_s0 = Module(new LoadUnit_S0)
   val load_s1 = Module(new LoadUnit_S1)
   val load_s2 = Module(new LoadUnit_S2)
+
 
   // load s0
   load_s0.io.in <> io.ldin
@@ -755,8 +757,14 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
   io.ldout.valid := RegNext(hitLoadOut.valid) && !RegNext(load_s2.io.out.bits.uop.robIdx.needFlush(io.redirect)) ||
     RegNext(io.lsq.ldout.valid) && !RegNext(io.lsq.ldout.bits.uop.robIdx.needFlush(io.redirect)) && !RegNext(hitLoadOut.valid)
 
+  io.ldout_dup.bits := s3_load_wb_meta_reg
+  io.ldout_dup.bits.data := Mux(RegNext(hitLoadOut.valid), s3_rdataPartialLoadDcache, s3_rdataPartialLoadLQ)
+  io.ldout_dup.valid := RegNext(hitLoadOut.valid) && !RegNext(load_s2.io.out.bits.uop.robIdx.needFlush(io.redirect)) ||
+    RegNext(io.lsq.ldout.valid) && !RegNext(io.lsq.ldout.bits.uop.robIdx.needFlush(io.redirect)) && !RegNext(hitLoadOut.valid)
+
   io.ldout.bits.uop.cf.exceptionVec(loadAccessFault) := s3_load_wb_meta_reg.uop.cf.exceptionVec(loadAccessFault) //||
     //RegNext(hitLoadOut.valid) && load_s2.io.s3_delayed_load_error
+  io.ldout_dup.bits.uop.cf.exceptionVec(loadAccessFault) := s3_load_wb_meta_reg.uop.cf.exceptionVec(loadAccessFault)
 
   // fast load to load forward
   io.fastpathOut.valid := RegNext(load_s2.io.out.valid) // for debug only
@@ -785,6 +793,7 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
   // 1) use load pipe check result generated in load_s3 iff load_hit
   when (RegNext(hitLoadOut.valid)) {
     io.ldout.bits.uop.ctrl.replayInst := s3_need_replay_from_fetch
+    io.ldout_dup.bits.uop.ctrl.replayInst := s3_need_replay_from_fetch
   }
   // 2) otherwise, write check result to load queue
   io.lsq.s3_replay_from_fetch := s3_need_replay_from_fetch && s3_can_replay_from_fetch

@@ -23,8 +23,10 @@ import difftest._
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import utils._
 import xiangshan._
+import xiangshan.backend._
 import xiangshan.backend.exu.ExuConfig
 import xiangshan.frontend.FtqPtr
+import xiangshan.backend.fu.matu._
 
 class RobPtr(implicit p: Parameters) extends CircularQueuePtr[RobPtr](
   p => p(XSCoreParamsKey).RobSize
@@ -283,6 +285,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
     val commits = new RobCommitIO
     val lsq = new RobLsqIO
     val robDeqPtr = Output(new RobPtr)
+    val deqPtrVec_v = Vec(CommitWidth, Output(UInt(5.W)))
     val csr = new RobCSRIO
     val robFull = Output(Bool())
     val cpu_halt = Output(Bool())
@@ -334,6 +337,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
   // For enqueue ptr, we don't duplicate it since only enqueue needs it.
   val enqPtrVec = Wire(Vec(RenameWidth, new RobPtr))
   val deqPtrVec = Wire(Vec(CommitWidth, new RobPtr))
+  val deqPtrVec_v = Wire(Vec(CommitWidth, UInt(5.W)))
 
   val walkPtrVec = Reg(Vec(CommitWidth, new RobPtr))
   val allowEnqueue = RegInit(true.B)
@@ -341,6 +345,11 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
   val enqPtr = enqPtrVec.head
   val deqPtr = deqPtrVec(0)
   val walkPtr = walkPtrVec(0)
+
+  for (i <- 0 until CommitWidth) {
+    deqPtrVec_v(i) := deqPtrVec(i).value
+  }
+  io.deqPtrVec_v := deqPtrVec_v
 
   val isEmpty = enqPtr === deqPtr
   val isReplaying = io.redirect.valid && RedirectLevel.flushItself(io.redirect.bits.level)

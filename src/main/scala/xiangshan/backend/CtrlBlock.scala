@@ -216,6 +216,8 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
       val exception = ValidIO(new ExceptionInfo)
       // to mem block
       val lsq = new RobLsqIO
+      // to MPU
+      val deqPtrVec_v = Vec(CommitWidth, Output(UInt(5.W)))
     }
     val csrCtrl = Input(new CustomCSRCtrlIO)
     val perfInfo = Output(new Bundle{
@@ -552,6 +554,9 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
 
   // rob to mem block
   io.robio.lsq <> rob.io.lsq
+
+  // rob to MPU
+  io.robio.deqPtrVec_v := rob.io.deqPtrVec_v
 
   io.perfInfo.ctrlInfo.robFull := RegNext(rob.io.robFull)
   io.perfInfo.ctrlInfo.intdqFull := RegNext(intDq.io.dqFull)

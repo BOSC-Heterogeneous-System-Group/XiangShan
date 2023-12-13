@@ -58,6 +58,7 @@ trait HasLoadHelper { this: XSModule =>
       LSUOpType.lbu  -> ZeroExt(rdata(7, 0) , XLEN),
       LSUOpType.lhu  -> ZeroExt(rdata(15, 0), XLEN),
       LSUOpType.lwu  -> ZeroExt(rdata(31, 0), XLEN),
+      LSUOpType.mlb  -> SignExt(rdata(7, 0) , XLEN)
     ))
   }
 }
@@ -92,18 +93,18 @@ class LoadQueue(implicit p: Parameters) extends XSModule
     val brqRedirect = Flipped(ValidIO(new Redirect))
     val loadPaddrIn = Vec(LoadPipelineWidth, Flipped(Valid(new LqPaddrWriteBundle)))
     val loadIn = Vec(LoadPipelineWidth, Flipped(Valid(new LqWriteBundle)))
-    val storeIn = Vec(StorePipelineWidth, Flipped(Valid(new LsPipelineBundle)))
+    val storeIn = Vec(StorePipelineWidth, Flipped(Valid(new LsPipelineBundle))) // Unknown
     val s2_load_data_forwarded = Vec(LoadPipelineWidth, Input(Bool()))
     val s3_delayed_load_error = Vec(LoadPipelineWidth, Input(Bool()))
     val s2_dcache_require_replay = Vec(LoadPipelineWidth, Input(Bool()))
     val s3_replay_from_fetch = Vec(LoadPipelineWidth, Input(Bool()))
     val ldout = Vec(2, DecoupledIO(new ExuOutput)) // writeback int load
-    val ldRawDataOut = Vec(2, Output(new LoadDataFromLQBundle))
+    val ldRawDataOut = Vec(2, Output(new LoadDataFromLQBundle)) // Unknown
     val load_s1 = Vec(LoadPipelineWidth, Flipped(new PipeLoadForwardQueryIO)) // TODO: to be renamed
-    val loadViolationQuery = Vec(LoadPipelineWidth, Flipped(new LoadViolationQueryIO))
+    val loadViolationQuery = Vec(LoadPipelineWidth, Flipped(new LoadViolationQueryIO)) // unknown, only paddr provided
     val rob = Flipped(new RobLsqIO)
     val rollback = Output(Valid(new Redirect)) // replay now starts from load instead of store
-    val dcache = Flipped(ValidIO(new Refill)) // TODO: to be renamed
+    val dcache = Flipped(ValidIO(new Refill)) // TODO: to be renamed, unknown : 256 bits?
     val release = Flipped(ValidIO(new Release))
     val uncache = new UncacheWordIO
     val exceptionAddr = new ExceptionAddrIO
@@ -277,6 +278,7 @@ class LoadQueue(implicit p: Parameters) extends XSModule
     //   vaddrTriggerResultModule.io.wen(i) := true.B
     // }
 
+    // unknown
     // dirty code to reduce load_s2.valid fanout
     when(io.loadIn(i).bits.lq_data_wen_dup(0)){
       val loadWbData = Wire(new LQDataEntry)

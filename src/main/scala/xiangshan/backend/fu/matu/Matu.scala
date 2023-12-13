@@ -11,7 +11,7 @@ import xiangshan.backend.fu._
 
 
 class Matu(implicit p: Parameters) extends FunctionUnit{
-    val dataModule = Module(new XS_miniTPU)
+    val dataModule = Module(new XS_miniTPU_R)
 
     val newReq = io.in.fire()
     val uop = io.in.bits.uop
@@ -28,30 +28,30 @@ class Matu(implicit p: Parameters) extends FunctionUnit{
     io.out.bits.data := dataModule.io.xsIO.out.bits.data
 }
 
-class xsFUInput(implicit p: Parameters) extends XSBundle {
+class xsFUInput_R(implicit p: Parameters) extends XSBundle {
     val src = Input(Vec(2, UInt(XLEN.W)))
     val OpType = Input(FuOpType())
 }
 
-class xsFUOutput(implicit p: Parameters) extends XSBundle {
+class xsFUOutput_R(implicit p: Parameters) extends XSBundle {
     val data = Output(UInt(XLEN.W))
 }
 
-class xsFUIO (implicit p: Parameters) extends XSBundle {
+class xsFUIO_R(implicit p: Parameters) extends XSBundle {
 
-    val in = Flipped(DecoupledIO(new xsFUInput))
+    val in = Flipped(DecoupledIO(new xsFUInput_R))
 
-    val out = DecoupledIO(new xsFUOutput)
+    val out = DecoupledIO(new xsFUOutput_R)
 }
 
-class XS_miniTPU(implicit p: Parameters) extends XSModule{
+class XS_miniTPU_R(implicit p: Parameters) extends XSModule{
     val io = IO(new Bundle {
-        val xsIO = new xsFUIO()
+        val xsIO = new xsFUIO_R()
     })
 
-    val inBridge  = Module(new InputBridge())
-    val mini_tpu  = Module(new top(4,16,2,2))
-    val outBridge = Module(new OutputBridge())
+    val inBridge  = Module(new InputBridge_R())
+    val mini_tpu  = Module(new top_R(4,16,2,2))
+    val outBridge = Module(new OutputBridge_R())
 
     inBridge.io.in_valid  := io.xsIO.in.valid
     io.xsIO.in.ready      := inBridge.io.out_ready
@@ -74,7 +74,7 @@ class XS_miniTPU(implicit p: Parameters) extends XSModule{
 
 }
 
-class OutputBridge() extends Module {
+class OutputBridge_R() extends Module {
     val io = IO(new Bundle {
         val in_valid  = Input(Bool())
         val out_ready = Output(Bool())
@@ -110,7 +110,7 @@ class OutputBridge() extends Module {
     io.result := Cat(indices.map { case (i, j) => result(i)(j) }.reverse).asSInt
 }
 
-class InputBridge() extends Module {
+class InputBridge_R() extends Module {
     val io = IO(new Bundle {
         val in_valid  = Input(Bool())
         val out_ready = Output(Bool())
@@ -158,24 +158,24 @@ class InputBridge() extends Module {
     io.out_valid := valid_r
 }
 
-class miniTPUInput(val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Bundle {
+class miniTPUInput_R(val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Bundle {
     val in_a = Input(Vec(SA_ROWS, SInt(IN_WIDTH.W)))
     val in_b = Input(Vec(SA_COLS, SInt(IN_WIDTH.W)))
     val in_c = Input(Vec(SA_COLS, SInt(C_WIDTH.W)))
 }
 
-class miniTPUOutput(val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Bundle {
+class miniTPUOutput_R(val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Bundle {
     val out_c = Output(Vec(SA_COLS, SInt(C_WIDTH.W)))
 }
 
-class miniTPUIO (val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Bundle {
-    val in = Flipped(DecoupledIO(new miniTPUInput(IN_WIDTH, C_WIDTH, SA_ROWS, SA_COLS)))
-    val out = DecoupledIO(new miniTPUOutput(IN_WIDTH, C_WIDTH, SA_ROWS, SA_COLS))
+class miniTPUIO_R(val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Bundle {
+    val in = Flipped(DecoupledIO(new miniTPUInput_R(IN_WIDTH, C_WIDTH, SA_ROWS, SA_COLS)))
+    val out = DecoupledIO(new miniTPUOutput_R(IN_WIDTH, C_WIDTH, SA_ROWS, SA_COLS))
 }
 
-class top (val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Module {
+class top_R (val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: Int) extends Module {
     val io = IO(new Bundle {
-        val tpuIO = new miniTPUIO(IN_WIDTH, C_WIDTH, SA_ROWS, SA_COLS)
+        val tpuIO = new miniTPUIO_R(IN_WIDTH, C_WIDTH, SA_ROWS, SA_COLS)
     })
 
     val sa = Module(new SystolicArray(IN_WIDTH,C_WIDTH,SA_ROWS,SA_COLS))
@@ -187,12 +187,9 @@ class top (val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: I
     inBuffer_h.io.data_in.valid := io.tpuIO.in.valid
     inBuffer_h.io.data_in.bits := io.tpuIO.in.bits.in_a
     inBuffer_h.io.ctrl_ib_data_out := controller.io.ctrl_ib_data_out
-    inBuffer_h.io.ctrl_sa_isIdle := controller.io.ctrl_sa_isIdle
-
     inBuffer_v.io.data_in.valid := io.tpuIO.in.valid
     inBuffer_v.io.data_in.bits := io.tpuIO.in.bits.in_b
     inBuffer_v.io.ctrl_ib_data_out := controller.io.ctrl_ib_data_out
-    inBuffer_v.io.ctrl_sa_isIdle := controller.io.ctrl_sa_isIdle
     io.tpuIO.in.ready := inBuffer_h.io.data_in.ready & inBuffer_v.io.data_in.ready
 
     io.tpuIO.out.valid := outBuffer.io.data_out.valid
@@ -204,8 +201,7 @@ class top (val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS: I
     sa.io.in_b := inBuffer_v.io.data_out
     sa.io.in_c := io.tpuIO.in.bits.in_c  // TODO: preload in_c as bias
     outBuffer.io.data_in := sa.io.out_c
-    sa.io.in_control.foreach(_.ctrl_send_data := controller.io.ctrl_sa_send_data)
-    sa.io.in_control.foreach(_.ctrl_stall_data := controller.io.ctrl_sa_isStall)
+    sa.io.in_control.foreach(_.ctrl_sa_send_data := controller.io.ctrl_sa_send_data)
 
     controller.io.ibh_data_in_done := inBuffer_h.io.ib_data_in_done
     controller.io.ibv_data_in_done := inBuffer_v.io.ib_data_in_done
