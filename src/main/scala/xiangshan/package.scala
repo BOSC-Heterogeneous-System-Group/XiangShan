@@ -380,6 +380,7 @@ package object xiangshan {
     def lbu      = "b0100".U
     def lhu      = "b0101".U
     def lwu      = "b0110".U
+    def mlb      = "b0111".U
 
     // Zicbop software prefetch
     // bit encoding: | prefetch 1 | 0 | prefetch type (2bit) |

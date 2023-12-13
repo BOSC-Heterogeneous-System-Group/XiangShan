@@ -34,6 +34,7 @@ import xiangshan.cache._
 import xiangshan.cache.mmu.{BTlbPtwIO, TLB, TlbReplace}
 import xiangshan.mem._
 import xiangshan.mem.prefetch.{BasePrefecher, SMSParams, SMSPrefetcher}
+import xiangshan.backend.fu.matu._
 
 class Std(implicit p: Parameters) extends FunctionUnit {
   io.in.ready := true.B
@@ -83,6 +84,7 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
     val writeback = Vec(exuParameters.LsExuCnt + exuParameters.StuCnt, DecoupledIO(new ExuOutput))
     val s3_delayed_load_error = Vec(exuParameters.LduCnt, Output(Bool()))
     val otherFastWakeup = Vec(exuParameters.LduCnt + 2 * exuParameters.StuCnt, ValidIO(new MicroOp))
+    val ldout_dup = Vec(exuParameters.LduCnt, DecoupledIO(new ExuOutput))
     // misc
     val stIn = Vec(exuParameters.StuCnt, ValidIO(new ExuInput))
     val memoryViolation = ValidIO(new Redirect)
@@ -157,6 +159,11 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
   storeUnits.zipWithIndex.map(x => x._1.suggestName("StoreUnit_"+x._2))
 
   val atomicsUnit = Module(new AtomicsUnit)
+
+  io.ldout_dup(0) <> loadUnits(0).io.ldout_dup
+  io.ldout_dup(1) <> loadUnits(1).io.ldout_dup
+  loadUnits(0).io.ldout_dup.ready := io.ldout_dup(0).ready
+  loadUnits(1).io.ldout_dup.ready := io.ldout_dup(1).ready
 
   // Atom inst comes from sta / std, then its result
   // will be writebacked using load writeback port
