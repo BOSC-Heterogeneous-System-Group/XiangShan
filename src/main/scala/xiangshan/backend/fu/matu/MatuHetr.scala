@@ -57,7 +57,7 @@ class xsFUOutput_M(implicit p: Parameters) extends XSBundle {
 
 class xsFUIO_M (implicit p: Parameters) extends XSBundle {
 
-  val in = Vec(2, Flipped(ValidIO(new xsFUInput_M)))
+  val in = Vec(exuParameters.LduCnt, Flipped(ValidIO(new xsFUInput_M)))
   val deqptr = Vec(CommitWidth, Input(UInt(5.W)))
 
   val out = DecoupledIO(new xsFUOutput_M())
@@ -71,7 +71,7 @@ class XS_miniTPU_M(implicit p: Parameters) extends XSModule{
   val mini_tpu  = Module(new top_M(4,16,2,2))
   val outBridge = Module(new OutputBridge_M())
   val inBridge_m  = Module(new InputBridge_M())
-  val rob = Module(new SA_ROB_Wrapper)
+  val rob = Module(new SA_ROB)
 
   rob.io.ldin.valid(0) := io.xsIO.in(0).valid
   rob.io.ldin.valid(1) := io.xsIO.in(1).valid
@@ -142,403 +142,141 @@ class OutputBridge_M() extends Module {
 }
 
 class ROBIn(implicit p: Parameters) extends XSBundle {
-  val data = Vec(2, Input(UInt(XLEN.W)))
-  val robIdx = Vec(2, Input(UInt(5.W)))
-  val fuOptype = Vec(2, Input(FuOpType()))
-  val valid = Vec(2, Input(Bool()))
+  val data = Vec(exuParameters.LduCnt, Input(UInt(XLEN.W)))
+  val robIdx = Vec(exuParameters.LduCnt, Input(UInt(5.W)))
+  val fuOptype = Vec(exuParameters.LduCnt, Input(FuOpType()))
+  val valid = Vec(exuParameters.LduCnt, Input(Bool()))
 }
 
-class SA_ROB_Wrapper(implicit p: Parameters) extends XSModule{
+class SA_ROB(implicit p: Parameters) extends XSModule {
   val io = IO(new Bundle() {
+    val deqptr = Vec(CommitWidth, Input(UInt(5.W)))
     val ldin = new ROBIn()
-    val deqptr = Vec(CommitWidth, Input(UInt(5.W)))
     val out = DecoupledIO(UInt(XLEN.W))
-  })
-  val ldBuff = Module(new ldBuffer())
-  val rob = Module(new SA_ROB())
-
-  ldBuff.io.ldin := io.ldin
-  ldBuff.io.deqptr := io.deqptr
-
-  rob.io.MatchVec := ldBuff.io.bufout.MatchVec
-  rob.io.data := ldBuff.io.bufout.data
-
-
-  io.out.bits := rob.io.out.bits
-  io.out.valid := rob.io.out.valid
-  rob.io.out.ready := io.out.ready
-
-
-
-}
-
-
-class BufIn (implicit p: Parameters) extends XSBundle {
-  val data = Vec(2, Input(UInt(XLEN.W)))
-  val robIdx = Vec(2, Input(UInt(5.W)))
-  val fuOptype = Vec(2, Input(FuOpType()))
-  val valid = Vec(2, Input(Bool()))
-}
-
-class BufOut (implicit p: Parameters) extends XSBundle {
-  val data = Vec(4, Output(UInt(XLEN.W)))
-  val MatchVec = Vec(4, Output(UInt(CommitWidth.W)))
-  val valid = Vec(4, Output(Bool()))
-}
-
-class ldBuffer(implicit p: Parameters) extends XSModule {
-  val io = IO(new Bundle() {
-    val deqptr = Vec(CommitWidth, Input(UInt(5.W)))
-    val ldin = new BufIn()
-    val bufout  = new BufOut()
     // val ready = Input(Bool())
   })
 
-  val MatchVec = Wire(Vec(4, Vec(CommitWidth, Bool())))
-  val matchVecUInt = WireInit(VecInit(MatchVec.map(_.asUInt())))
-  val validReg = RegInit(VecInit(Seq.fill(4)(false.B)))
-  val dataReg = RegInit(VecInit(Seq.fill(4)(0.U(64.W))))
-  val deqptrReg = Reg(Vec(CommitWidth, UInt(5.W)))
-  val robIdxReg = Reg(Vec(4, UInt(5.W)))
+  val data_queue = RegInit(VecInit(Seq.fill(2)(VecInit(Seq.fill(4)(0.U(64.W))))))
+  val data_writePtr = RegInit(VecInit(Seq.fill(2)(0.U(2.W))))
 
+  val robIdx_queue = Seq.fill(2)(RegInit(VecInit(Seq.fill(4)(0.U(5.W)))))
+  val robIdx_writePtr = RegInit(VecInit(Seq.fill(2)(0.U(2.W))))
 
-  validReg(0) := (io.ldin.fuOptype(0) === LSUOpType.mlb) && (io.ldin.valid(0) === true.B)
-  validReg(1) := (io.ldin.fuOptype(1) === LSUOpType.mlb) && (io.ldin.valid(1) === true.B)
-  validReg(2) := Mux(MatchVec(0).asUInt().orR(), false.B, validReg(0)) | Mux(MatchVec(2).asUInt().orR(), false.B, validReg(2))
-  validReg(3) := Mux(MatchVec(1).asUInt().orR(), false.B, validReg(1)) | Mux(MatchVec(3).asUInt().orR(), false.B, validReg(3))
-  dataReg(0) := Mux(io.ldin.valid(0) && io.ldin.fuOptype(0) === LSUOpType.mlb, io.ldin.data(0), dataReg(0))
-  dataReg(1) := Mux(io.ldin.valid(1) && io.ldin.fuOptype(1) === LSUOpType.mlb, io.ldin.data(1), dataReg(1))
-  dataReg(2) := dataReg(0)
-  dataReg(3) := dataReg(1)
-  robIdxReg(0) := Mux(io.ldin.valid(0) && io.ldin.fuOptype(0) === LSUOpType.mlb, io.ldin.robIdx(0), robIdxReg(0))
-  robIdxReg(1) := Mux(io.ldin.valid(1) && io.ldin.fuOptype(1) === LSUOpType.mlb, io.ldin.robIdx(1), robIdxReg(1))
-  robIdxReg(2) := robIdxReg(0)
-  robIdxReg(3) := robIdxReg(1)
-  deqptrReg := io.deqptr
+  val valid_queue = Seq.fill(2)(RegInit(VecInit(Seq.fill(4)(false.B))))
+  val valid_writePtr = RegInit(VecInit(Seq.fill(2)(0.U(2.W))))
 
-  for (i <- 0 until 6) {
-    MatchVec(0)(i) := validReg(0) && (deqptrReg(i) === robIdxReg(0)).asBool
-    MatchVec(1)(i) := validReg(1) && (deqptrReg(i) === robIdxReg(1)).asBool
-    MatchVec(2)(i) := validReg(2) && (deqptrReg(i) === robIdxReg(2)).asBool
-    MatchVec(3)(i) := validReg(3) && (deqptrReg(i) === robIdxReg(3)).asBool
-  }
-  io.bufout.data := dataReg
-  io.bufout.valid := validReg
-  io.bufout.MatchVec := matchVecUInt
+  val deqptrReg = RegInit(VecInit(Seq.fill(6)(0.U(5.W))))
 
-}
+  val MatchVec = Seq.fill(2)(WireInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(6)(false.B))))))
+  val MatchVec_lastCycle = RegInit(VecInit(Seq.fill(2)(VecInit(Seq.fill(4)(0.U(6.W))))))
+  val MatchVecUInt = RegInit(VecInit(Seq.fill(2)(VecInit(Seq.fill(4)(0.U(12.W))))))
+  val MatchVecMask = WireInit(VecInit(Seq.fill(2)(VecInit(Seq.fill(4)(4095.U(12.W))))))
 
-class SA_ROB() extends Module{
-  val io = IO(new Bundle(){
-    val MatchVec = Vec(4, Input(UInt(6.W)))
-    val data = Vec(4, Input(UInt(64.W)))
-    val out = DecoupledIO(UInt(64.W))
-  })
-  val isEmpty = WireInit(false.B)
-  val deq = WireInit(false.B)
-  val readPtr = RegInit(0.U(3.W))
-  val writePtr = RegInit(0.U(3.W))
-  val writePtrP1= WireInit(writePtr+1.U(3.W))
-  val writePtrP2= WireInit(writePtr+2.U(3.W))
-  val writePtrP3= WireInit(writePtr+3.U(3.W))
-  val mem = RegInit(VecInit(Seq.fill(4)(0.U(64.W))))
-  val matchVecORR = Cat(io.MatchVec(3).orR, io.MatchVec(2).orR, io.MatchVec(1).orR, io.MatchVec(0).orR)
-
-  isEmpty := readPtr === writePtr
-  deq := !isEmpty & io.out.ready
   val deqData = WireInit(0.U(64.W))
 
-  val flag = WireInit(false.B)
-  flag := (io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) > 0.U) && (io.MatchVec(0) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(3))
+  deqptrReg := io.deqptr
+  MatchVec_lastCycle := MatchVecUInt
 
-  when(deq) {
-    readPtr := readPtr + 1.U
-    deqData := mem(readPtr)
+
+  for (i <- 0 until 2) {
+    when((io.ldin.fuOptype(i) === LSUOpType.mlb) && (io.ldin.valid(i) === true.B)){
+      data_writePtr(i) := data_writePtr(i) + 1.U
+      data_queue(i)(data_writePtr(i)):= io.ldin.data(i)
+
+      robIdx_writePtr(i) := robIdx_writePtr(i) + 1.U
+      robIdx_queue(i)(robIdx_writePtr(i)) := io.ldin.robIdx(i)
+
+      valid_writePtr(i) := valid_writePtr(i) + 1.U
+      valid_queue(i)(valid_writePtr(i)) := io.ldin.valid(i)
+    }
   }
 
+  for(i <- 0 until 2) {
+    for(j <- 0 until 4) {
+      for(k <- 0 until 6) {
+        when (valid_queue(i)(j) && (robIdx_queue(i)(j) === deqptrReg(k))) {
+          MatchVec(i)(j)(k) := true.B
+        }
+      }
+    }
+  }
+
+  val minMask = Wire(UInt(12.W))
+  val minMask_0 = Wire(UInt(12.W))
+  val minMask_1 = Wire(UInt(12.W))
+  val minMask_0_0_1 = Wire(UInt(12.W))
+  val minMask_0_2_3 = Wire(UInt(12.W))
+  val minMask_1_0_1 = Wire(UInt(12.W))
+  val minMask_1_2_3 = Wire(UInt(12.W))
+  val minIndex_i = WireInit(0.U(1.W))
+  val minIndex_j = WireInit(0.U(2.W))
+
+  val maxMatch = RegInit(0.U(12.W))
+  val maxMatch_0 = Wire(UInt(12.W))
+  val maxMatch_1 = Wire(UInt(12.W))
+  val maxMatch_0_0_1 = Wire(UInt(12.W))
+  val maxMatch_0_2_3 = Wire(UInt(12.W))
+  val maxMatch_1_0_1 = Wire(UInt(12.W))
+  val maxMatch_1_2_3 = Wire(UInt(12.W))
+
+  minMask_0_0_1 := Mux(MatchVecMask(0)(0) > MatchVecMask(0)(1), MatchVecMask(0)(1), MatchVecMask(0)(0))
+  minMask_0_2_3 := Mux(MatchVecMask(0)(2) > MatchVecMask(0)(3), MatchVecMask(0)(3), MatchVecMask(0)(2))
+  minMask_0 := Mux(minMask_0_0_1 > minMask_0_2_3, minMask_0_2_3, minMask_0_0_1)
+
+  minMask_1_0_1 := Mux(MatchVecMask(1)(0) > MatchVecMask(1)(1), MatchVecMask(1)(1), MatchVecMask(1)(0))
+  minMask_1_2_3 := Mux(MatchVecMask(1)(2) > MatchVecMask(1)(3), MatchVecMask(1)(3), MatchVecMask(1)(2))
+  minMask_1 := Mux(minMask_1_0_1 > minMask_1_2_3, minMask_1_2_3, minMask_1_0_1)
+
+  minMask := Mux(minMask_0 > minMask_1, minMask_1, minMask_0)
+
+  maxMatch_0_0_1 := Mux(MatchVecUInt(0)(0) < MatchVecUInt(0)(1), MatchVecUInt(0)(1), MatchVecUInt(0)(0))
+  maxMatch_0_2_3 := Mux(MatchVecUInt(0)(2) < MatchVecUInt(0)(3), MatchVecUInt(0)(3), MatchVecUInt(0)(2))
+  maxMatch_0 := Mux(maxMatch_0_0_1 < maxMatch_0_2_3, maxMatch_0_2_3, maxMatch_0_0_1)
+
+  maxMatch_1_0_1 := Mux(MatchVecUInt(1)(0) < MatchVecUInt(1)(1), MatchVecUInt(1)(1), MatchVecUInt(1)(0))
+  maxMatch_1_2_3 := Mux(MatchVecUInt(1)(2) < MatchVecUInt(1)(3), MatchVecUInt(1)(3), MatchVecUInt(1)(2))
+  maxMatch_1 := Mux(maxMatch_1_0_1 < maxMatch_1_2_3, maxMatch_1_2_3, maxMatch_1_0_1)
+
+  maxMatch := Mux(maxMatch_0 < maxMatch_1, maxMatch_1, maxMatch_0)
+
+  for (i <- 0 until 2) {
+    for (j <- 0 until 4) {
+      when(MatchVec(i)(j).asUInt > 0.U && MatchVec_lastCycle(i)(j) === 0.U) {
+        MatchVecUInt(i)(j) := MatchVec(i)(j).asUInt + maxMatch
+      }.elsewhen(MatchVec(i)(j).asUInt > 0.U) {
+        MatchVecUInt(i)(j) := MatchVec(i)(j).asUInt
+      }
+    }
+  }
+
+  for (i <- 0 until 2) {
+    for (j <- 0 until 4) {
+      when(MatchVecUInt(i)(j) === 0.U) {
+        MatchVecMask(i)(j) := ~MatchVecUInt(i)(j)
+      }.otherwise {
+        MatchVecMask(i)(j) := MatchVecUInt(i)(j)
+      }
+    }
+  }
+
+  for(i <- 0 until 2) {
+    for(j <- 0 until 4){
+      when(minMask === MatchVecMask(i)(j) && (MatchVecMask(i)(j) < 4095.U)) {
+        minIndex_i := i.U
+        minIndex_j := j.U
+        valid_queue(i)(j) := false.B
+        MatchVecUInt(i)(j) := 0.U
+        deqData := data_queue(minIndex_i)(minIndex_j)
+      }
+    }
+  }
   io.out.bits := deqData
-  io.out.valid := !isEmpty
+  io.out.valid := minMask < 4095.U
 
-  writePtr := MuxCase(writePtr,
-    Array(
-      (PopCount(matchVecORR) === 4.U) -> (writePtr + 4.U),
-      (PopCount(matchVecORR) === 3.U) -> (writePtr + 3.U),
-      (PopCount(matchVecORR) === 2.U) -> (writePtr + 2.U),
-      (PopCount(matchVecORR) === 1.U) -> (writePtr + 1.U),
-      (PopCount(matchVecORR) === 0.U) -> (writePtr + 0.U)
-    )
-  )
-  // This code is to express my dissatisfaction with the way the group operates
-  when(PopCount(matchVecORR) === 1.U) {
-    when(io.MatchVec(0) > 0.U) {
-      mem(writePtr) := io.data(0)
-    }.elsewhen(io.MatchVec(1)>0.U) {
-      mem(writePtr) := io.data(1)
-    }.elsewhen(io.MatchVec(2)>0.U) {
-      mem(writePtr) := io.data(2)
-    }.elsewhen(io.MatchVec(3)>0.U){
-      mem(writePtr) := io.data(3)
-    }
-  }.elsewhen(PopCount(matchVecORR) === 2.U){
-    when((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1)> 0.U).asBool && (io.MatchVec(0) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(1)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) > 0.U).asBool && (io.MatchVec(0) > io.MatchVec(1))){
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2)> 0.U).asBool && (io.MatchVec(0) < io.MatchVec(2))){
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(2)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2)> 0.U).asBool && (io.MatchVec(0) > io.MatchVec(2))){
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(3)> 0.U).asBool && (io.MatchVec(0) < io.MatchVec(3))){
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(3)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(3)> 0.U).asBool && (io.MatchVec(0) > io.MatchVec(3))){
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(0)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2)> 0.U).asBool && (io.MatchVec(1) < io.MatchVec(2))){
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(2)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2)> 0.U).asBool && (io.MatchVec(1) > io.MatchVec(2))){
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(1)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(3)> 0.U).asBool && (io.MatchVec(1) < io.MatchVec(3))){
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(3)
-    }.elsewhen((io.MatchVec(2) > 0.U).asBool && (io.MatchVec(3) > 0.U).asBool && (io.MatchVec(1) > io.MatchVec(3))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(1)
-    }.elsewhen((io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) > 0.U).asBool && (io.MatchVec(2) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(3)
-    }.elsewhen((io.MatchVec(2) > 0.U).asBool && (io.MatchVec(3) > 0.U).asBool && (io.MatchVec(3) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(2)
-    }
-  }.elsewhen(PopCount(matchVecORR) === 3.U) {
-    when((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2) > 0.U).asBool && (io.MatchVec(3) > 0.U).asBool && (io.MatchVec(1) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(3)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(1) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(2)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(2) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(3)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(2) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(1)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(3) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(1)
-    }.elsewhen((io.MatchVec(1) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(3) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(2)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(0) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(3)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(0) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(2)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(2) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(3)))  {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(3)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(2) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(3) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(3) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(2)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(0) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(3)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(0) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(1)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(1) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(3)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(1) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(3) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(3) >0.U).asBool && (io.MatchVec(3) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(1)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(0) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(2)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(0) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(1)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(1) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(2)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(1) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(2) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(0)
-    }.elsewhen((io.MatchVec(0) > 0.U).asBool && (io.MatchVec(1) >0.U).asBool && (io.MatchVec(2) >0.U).asBool && (io.MatchVec(2) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(1)
-    }
-  }.elsewhen(PopCount(matchVecORR) === 4.U) {
-    when((io.MatchVec(0) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(3))){
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(2)
-      mem(writePtrP3) := io.data(3)
-    }.elsewhen((io.MatchVec(0) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(2))){
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(3)
-      mem(writePtrP3) := io.data(2)
-    }.elsewhen((io.MatchVec(0) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(1)
-      mem(writePtrP3) := io.data(3)
-    }.elsewhen((io.MatchVec(0) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(3)
-      mem(writePtrP3) := io.data(1)
-    }.elsewhen((io.MatchVec(0) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(1)
-      mem(writePtrP3) := io.data(2)
-    }.elsewhen((io.MatchVec(0) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(0)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(2)
-      mem(writePtrP3) := io.data(1)
-    }.elsewhen((io.MatchVec(1) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(3)
-      mem(writePtrP3) := io.data(0)
-    }.elsewhen((io.MatchVec(1) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(0)
-      mem(writePtrP3) := io.data(3)
-    }.elsewhen((io.MatchVec(1) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(0)
-      mem(writePtrP3) := io.data(2)
-    }.elsewhen((io.MatchVec(1) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(2)
-      mem(writePtrP3) := io.data(0)
-    }.elsewhen((io.MatchVec(1) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(2)
-      mem(writePtrP3) := io.data(3)
-    }.elsewhen((io.MatchVec(1) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(1)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(3)
-      mem(writePtrP3) := io.data(2)
-    }.elsewhen((io.MatchVec(2) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(1)
-      mem(writePtrP3) := io.data(3)
-    }.elsewhen((io.MatchVec(2) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(3)
-      mem(writePtrP3) := io.data(1)
-    }.elsewhen((io.MatchVec(2) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(3))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(0)
-      mem(writePtrP3) := io.data(3)
-    }.elsewhen((io.MatchVec(2) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(3)
-      mem(writePtrP3) := io.data(0)
-    }.elsewhen((io.MatchVec(2) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(1)
-      mem(writePtrP3) := io.data(0)
-    }.elsewhen((io.MatchVec(2) < io.MatchVec(3)) && (io.MatchVec(3) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(2)
-      mem(writePtrP1) := io.data(3)
-      mem(writePtrP2) := io.data(0)
-      mem(writePtrP3) := io.data(1)
-    }.elsewhen((io.MatchVec(3) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(0)
-      mem(writePtrP3) := io.data(1)
-    }.elsewhen((io.MatchVec(3) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(2)
-      mem(writePtrP2) := io.data(1)
-      mem(writePtrP3) := io.data(0)
-    }.elsewhen((io.MatchVec(3) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(0))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(2)
-      mem(writePtrP3) := io.data(0)
-    }.elsewhen((io.MatchVec(3) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(1)
-      mem(writePtrP2) := io.data(0)
-      mem(writePtrP3) := io.data(2)
-    }.elsewhen((io.MatchVec(3) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(1)) && (io.MatchVec(1) < io.MatchVec(2))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(1)
-      mem(writePtrP3) := io.data(2)
-    }.elsewhen((io.MatchVec(3) < io.MatchVec(0)) && (io.MatchVec(0) < io.MatchVec(2)) && (io.MatchVec(2) < io.MatchVec(1))) {
-      mem(writePtr) := io.data(3)
-      mem(writePtrP1) := io.data(0)
-      mem(writePtrP2) := io.data(2)
-      mem(writePtrP3) := io.data(1)
-    }
-  }
 }
+
+
+
 
 class InputBridge_M() extends Module {
   val io = IO(new Bundle() {
