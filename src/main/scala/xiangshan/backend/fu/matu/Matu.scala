@@ -9,13 +9,32 @@ import utils._
 import xiangshan._
 import xiangshan.backend.fu._
 
+//class ldIO (implicit p: Parameters) extends XSBundle {
+//
+//    val ldIn = Vec(exuParameters.LduCnt, Flipped(DecoupledIO(new ExuOutput)))
+//
+//}
 
-class Matu(implicit p: Parameters) extends FunctionUnit{
+
+class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg){
     val dataModule = Module(new XS_miniTPU_R)
+    val inner_io = IO(new Bundle {
+        val data = Output(UInt(XLEN.W))
+    })
 
     val newReq = io.in.fire()
     val uop = io.in.bits.uop
     val uopReg = RegEnable(uop, newReq)
+    //val load_in = IO(new ldIO)
+
+    val load_in_r = RegInit(0.U(64.W))
+    inner_io.data := load_in_r + 3.U
+    //load_in_r := load_in.ldIn(0).bits.data
+    load_in_r := io.ldIn.get(0).bits.data
+    io.ldIn.get(0).ready := true.B
+    io.ldIn.get(1).ready := true.B
+//    load_in.ldIn(0).ready := true.B
+//    load_in.ldIn(1).ready := true.B
 
     dataModule.io.xsIO.in.bits.src := io.in.bits.src.take(2)
     dataModule.io.xsIO.in.bits.OpType := uopReg.ctrl.fuOpType

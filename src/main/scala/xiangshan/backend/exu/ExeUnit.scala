@@ -24,6 +24,7 @@ import chisel3.util._
 import utils._
 import xiangshan._
 import xiangshan.backend.fu.fpu.{FMA, FPUSubModule}
+import xiangshan.backend.fu.matu.Matu
 import xiangshan.backend.fu.{CSR, FUWithRedirect, Fence, FenceToSbuffer}
 
 class FenceIO(implicit p: Parameters) extends XSBundle {
@@ -95,6 +96,11 @@ class ExeUnit(config: ExuConfig)(implicit p: Parameters) extends Exu(config) {
   if (fmaModules.nonEmpty) {
     require(fmaModules.length == 1)
     fmaModules.head.midResult <> fmaMid.get
+  }
+
+  val matuModules =  functionUnits.filter(_.isInstanceOf[Matu]).map(_.asInstanceOf[Matu])
+  if (matuModules.nonEmpty) {
+    matuModules.head.io.ldIn.get <> ldio.get
   }
 
   if (config.readIntRf) {

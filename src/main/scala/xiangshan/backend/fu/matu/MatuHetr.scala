@@ -8,7 +8,7 @@ import matu.SystolicArray._
 import utils._
 import xiangshan._
 
-class lsuIO (implicit p: Parameters) extends XSBundle {
+/*class lsuIO (implicit p: Parameters) extends XSBundle {
 
   val ldIn = Vec(exuParameters.LduCnt, Flipped(DecoupledIO(new ExuOutput)))
 
@@ -392,4 +392,4 @@ class top_M (val IN_WIDTH: Int, val C_WIDTH: Int, val SA_ROWS: Int, val SA_COLS:
   controller.io.ibh_data_in_done := inBuffer_h.io.ib_data_in_done
   controller.io.ibv_data_in_done := inBuffer_v.io.ib_data_in_done
   controller.io.ob_empty := outBuffer.io.ob_empty
-}
+}*/

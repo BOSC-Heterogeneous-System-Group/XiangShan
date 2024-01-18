@@ -36,7 +36,7 @@ import xiangshan.mem._
 import xiangshan.mem.prefetch.{BasePrefecher, SMSParams, SMSPrefetcher}
 import xiangshan.backend.fu.matu._
 
-class Std(implicit p: Parameters) extends FunctionUnit {
+class Std(implicit p: Parameters) extends FunctionUnit(64, StdExeUnitCfg) {
   io.in.ready := true.B
   io.out.valid := io.in.valid
   io.out.bits.uop := io.in.bits.uop
@@ -160,8 +160,10 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
 
   val atomicsUnit = Module(new AtomicsUnit)
 
-  io.ldout_dup(0) <> loadUnits(0).io.ldout_dup
-  io.ldout_dup(1) <> loadUnits(1).io.ldout_dup
+  val ldout_reg = RegInit(0.U(64.W))
+  ldout_reg := loadUnits(0).io.ldout.bits.data
+  io.ldout_dup(0) <> loadUnits(0).io.ldout
+  io.ldout_dup(1) <> loadUnits(1).io.ldout
   loadUnits(0).io.ldout_dup.ready := io.ldout_dup(0).ready
   loadUnits(1).io.ldout_dup.ready := io.ldout_dup(1).ready
 
