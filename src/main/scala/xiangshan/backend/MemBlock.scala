@@ -162,8 +162,11 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
 
   val ldout_reg = RegInit(0.U(64.W))
   ldout_reg := loadUnits(0).io.ldout.bits.data
-  io.ldout_dup(0) <> loadUnits(0).io.ldout
-  io.ldout_dup(1) <> loadUnits(1).io.ldout
+  val ldout_w = dontTouch(Wire(Vec(exuParameters.LduCnt, DecoupledIO(new ExuOutput))))
+  ldout_w(0) <> loadUnits(0).io.ldout
+  ldout_w(1) <> loadUnits(1).io.ldout
+  io.ldout_dup(0) <> ldout_w(0)
+  io.ldout_dup(1) <> ldout_w(1)
   loadUnits(0).io.ldout_dup.ready := io.ldout_dup(0).ready
   loadUnits(1).io.ldout_dup.ready := io.ldout_dup(1).ready
 

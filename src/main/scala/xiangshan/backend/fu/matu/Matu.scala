@@ -27,7 +27,7 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg){
     val uopReg = RegEnable(uop, newReq)
     //val load_in = IO(new ldIO)
 
-    val load_in_r = RegInit(0.U(64.W))
+    val load_in_r = dontTouch(RegInit(0.U(64.W)))
     inner_io.data := load_in_r + 3.U
     //load_in_r := load_in.ldIn(0).bits.data
     load_in_r := io.ldIn.get(0).bits.data
