@@ -6,16 +6,43 @@ import chisel3.util._
 import matu.DataBuffer._
 import matu.SystolicArray._
 import utils._
-import xiangshan._
+import xiangshan.{MicroOp, _}
+import xiangshan.backend.exu.ExuParameters
 import xiangshan.backend.fu._
 
+//class ldIO (implicit p: Parameters) extends XSBundle {
+//
+//    val ldIn = Vec(exuParameters.LduCnt, Flipped(DecoupledIO(new ExuOutput)))
+//
+//}
 
-class Matu(implicit p: Parameters) extends FunctionUnit{
+
+class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg){
     val dataModule = Module(new XS_miniTPU_R)
+    val rf2D = Module(new Regfile_2D_wrapper)
 
     val newReq = io.in.fire()
     val uop = io.in.bits.uop
     val uopReg = RegEnable(uop, newReq)
+
+    val load_in_data_w = dontTouch(Wire(Vec(exuParameters.LduCnt, UInt(XLEN.W))))
+    val load_in_valid_w = dontTouch(Wire(Vec(exuParameters.LduCnt, Bool())))
+    val load_in_uop_w = dontTouch(Wire(Vec(exuParameters.LduCnt, new MicroOp)))
+
+    for (i <- 0 until exuParameters.LduCnt) {
+        load_in_data_w(i) := io.ldIn.get(i).bits.data
+        load_in_valid_w(i) := io.ldIn.get(i).valid
+        load_in_uop_w(i) := io.ldIn.get(i).bits.uop
+    }
+
+    for (i <- 0 until exuParameters.LduCnt) {
+        rf2D.io.data_in(i) := load_in_data_w(i)
+        rf2D.io.valid_in(i) := load_in_valid_w(i)
+        rf2D.io.uop_in(i) := load_in_uop_w(i)
+    }
+
+    io.ldIn.get(0).ready := true.B
+    io.ldIn.get(1).ready := true.B
 
     dataModule.io.xsIO.in.bits.src := io.in.bits.src.take(2)
     dataModule.io.xsIO.in.bits.OpType := uopReg.ctrl.fuOpType
@@ -27,6 +54,8 @@ class Matu(implicit p: Parameters) extends FunctionUnit{
     io.out.bits.uop := uopReg
     io.out.bits.data := dataModule.io.xsIO.out.bits.data
 }
+
+
 
 class xsFUInput_R(implicit p: Parameters) extends XSBundle {
     val src = Input(Vec(2, UInt(XLEN.W)))

@@ -440,11 +440,11 @@ object CBODecode extends DecodeConstants {
  */
 object MatrixDecode extends DecodeConstants{
   def MMUL = BitPat("b0000000_?????_?????_000_?????_0101011")
-  def MLB  = BitPat("b????????????_?????_111_?????_0101011")
+  def MLD  = BitPat("b????????????_?????_111_?????_0101011")
 
   val table: Array[(BitPat, List[BitPat])] = Array(
     MMUL -> List(SrcType.reg, SrcType.reg, SrcType.X, FuType.matu, MATUOpType.mmul, Y, N, N, N, N, N, SelImm.X),
-    MLB -> List(SrcType.reg, SrcType.imm, SrcType.X, FuType.ldu, LSUOpType.mlb, Y, N, N, N, N, N, SelImm.IMM_I)
+    MLD -> List(SrcType.reg, SrcType.imm, SrcType.X, FuType.ldu, LSUOpType.mld, N, N, N, N, N, N, SelImm.IMM_I)
   )
 }
 

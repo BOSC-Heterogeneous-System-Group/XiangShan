@@ -263,7 +263,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   val ptw = outer.ptw.module
   val ptw_to_l2_buffer = outer.ptw_to_l2_buffer.module
   val exuBlocks = outer.exuBlocks.map(_.module)
-  val MPU = Module(new (MatuHetr))
+  //val MPU = Module(new (MatuHetr))
 
   frontend.io.hartId  := io.hartId
   ctrlBlock.io.hartId := io.hartId
@@ -271,11 +271,14 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   memBlock.io.hartId := io.hartId
   outer.wbArbiter.module.io.hartId := io.hartId
 
-  MPU.io.lsuIO.ldIn(0) <> memBlock.io.ldout_dup(0)
-  MPU.io.lsuIO.ldIn(1) <> memBlock.io.ldout_dup(1)
-  memBlock.io.ldout_dup(0).ready := MPU.io.lsuIO.ldIn(0).ready
-  memBlock.io.ldout_dup(1).ready := MPU.io.lsuIO.ldIn(1).ready
-  MPU.io.robIO.deqPtrVec_v := ctrlBlock.io.robio.deqPtrVec_v
+  exuBlocks.head.io.ldIn(0) <> memBlock.io.ldout_dup(0)
+  exuBlocks.head.io.ldIn(1) <> memBlock.io.ldout_dup(1)
+
+//  MPU.io.lsuIO.ldIn(0) <> memBlock.io.ldout_dup(0)
+//  MPU.io.lsuIO.ldIn(1) <> memBlock.io.ldout_dup(1)
+//  memBlock.io.ldout_dup(0).ready := MPU.io.lsuIO.ldIn(0).ready
+//  memBlock.io.ldout_dup(1).ready := MPU.io.lsuIO.ldIn(1).ready
+//  MPU.io.robIO.deqPtrVec_v := ctrlBlock.io.robio.deqPtrVec_v
 
   io.cpu_halt := ctrlBlock.io.cpu_halt
 

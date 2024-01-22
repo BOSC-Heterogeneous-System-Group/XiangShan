@@ -24,6 +24,7 @@ import utils.XSPerfAccumulate
 import xiangshan._
 import xiangshan.backend.fu._
 import xiangshan.backend.fu.fpu.FMAMidResultIO
+//import xiangshan.backend.fu.matu.ldIO
 
 case class ExuParameters
 (
@@ -125,6 +126,7 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule {
   @public val fenceio = if (config == JumpCSRExeUnitCfg) Some(IO(new FenceIO)) else None
   @public val frm = if (config == FmacExeUnitCfg || config == FmiscExeUnitCfg) Some(IO(Input(UInt(3.W)))) else None
   @public val fmaMid = if (config == FmacExeUnitCfg) Some(IO(new FMAMidResultIO)) else None
+  @public val ldio = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Flipped(DecoupledIO(new ExuOutput))))) else None
 
   val functionUnits = config.fuConfigs.map(cfg => {
     val mod = Module(cfg.fuGen(p))
