@@ -10,14 +10,7 @@ import xiangshan.{MicroOp, _}
 import xiangshan.backend.exu.ExuParameters
 import xiangshan.backend.fu._
 
-//class ldIO (implicit p: Parameters) extends XSBundle {
-//
-//    val ldIn = Vec(exuParameters.LduCnt, Flipped(DecoupledIO(new ExuOutput)))
-//
-//}
-
-
-class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg){
+class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with HasXSParameter{
     val dataModule = Module(new XS_miniTPU_R)
     val rf2D = Module(new Regfile_2D_wrapper)
 
@@ -36,13 +29,38 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg){
     }
 
     for (i <- 0 until exuParameters.LduCnt) {
-        rf2D.io.data_in(i) := load_in_data_w(i)
-        rf2D.io.valid_in(i) := load_in_valid_w(i)
-        rf2D.io.uop_in(i) := load_in_uop_w(i)
+        rf2D.io.ldIn.data_in(i) := load_in_data_w(i)
+        rf2D.io.ldIn.valid_in(i) := load_in_valid_w(i)
+        rf2D.io.ldIn.uop_in(i) := load_in_uop_w(i)
     }
 
     io.ldIn.get(0).ready := true.B
     io.ldIn.get(1).ready := true.B
+
+    for (i <- 0 until 2*dpParams.IntDqDeqWidth) {
+        io.dpIn.get(i).ready := true.B
+    }
+
+    val commit_info_r = dontTouch(Reg(Vec(CommitWidth, UInt(VAddrBits.W))))
+    commit_info_r <> io.commitIn_pc.get
+    rf2D.io.commitsIn.commits_pc <> io.commitIn_pc.get
+    rf2D.io.commitsIn.commits_valid <> io.commitIn_valid.get
+
+    val dp_in_uop_w = dontTouch(Wire(Vec(2*dpParams.IntDqDeqWidth, new MicroOp)))
+    val dp_in_valid_w = dontTouch(Wire(Vec(2*dpParams.IntDqDeqWidth, Bool())))
+    for (i <- 0 until 2*dpParams.IntDqDeqWidth) {
+        dp_in_uop_w(i) := io.dpIn.get(i).bits
+        dp_in_valid_w(i) := io.dpIn.get(i).valid
+    }
+    val scoreboard = Module(new Scoreboard)
+    scoreboard.io.dpIn.uop_in <> dp_in_uop_w
+    scoreboard.io.dpIn.valid_in <> dp_in_valid_w
+    scoreboard.io.commitsIn.commits_pc <> io.commitIn_pc.get
+    scoreboard.io.commitsIn.commits_valid <> io.commitIn_valid.get
+    scoreboard.io.wbIn.wen <> rf2D.io.wbInfoOut.wen
+    scoreboard.io.wbIn.waddr <> rf2D.io.wbInfoOut.waddr
+    scoreboard.io.wbIn.woffset <> rf2D.io.wbInfoOut.woffset
+
 
     dataModule.io.xsIO.in.bits.src := io.in.bits.src.take(2)
     dataModule.io.xsIO.in.bits.OpType := uopReg.ctrl.fuOpType

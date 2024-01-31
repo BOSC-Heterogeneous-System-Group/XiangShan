@@ -46,7 +46,7 @@ class FUBlockExtraIO(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) ext
 
 }
 
-class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XSModule {
+class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XSModule with HasXSParameter {
   val numIn = configs.map(_._2).sum
   val numFma = configs.filter(_._1 == FmacExeUnitCfg).map(_._2).sum
   val numMatu = configs.filter(_._1 == MatuExeUnitCfg).map(_._2).sum
@@ -55,8 +55,13 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val redirect = Flipped(ValidIO(new Redirect))
     // in
     val issue = Vec(numIn, Flipped(DecoupledIO(new ExuInput)))
+    // from dispatch
+    val dpIn = if(numMatu > 0) Some(Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
     // from mem
     val ldIn = if (numMatu > 0) Some(Vec(2, Flipped(DecoupledIO(new ExuOutput)))) else None
+    // from rob
+    val commitsIn_pc = if (numMatu > 0) Some(Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
+    val commitsIn_valid = if(numMatu > 0) Some(Vec(CommitWidth, Input(Bool()))) else None
     // out
     val writeback = Vec(numIn, DecoupledIO(new ExuOutput))
     // misc
@@ -109,6 +114,18 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
 
   if (io.ldIn.isDefined) {
     io.ldIn.get <> exeUnits.map(_.ldio).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.dpIn.isDefined) {
+    io.dpIn.get <> exeUnits.map(_.dpio).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.commitsIn_pc.isDefined) {
+    io.commitsIn_pc.get <> exeUnits.map(_.commitio_pc).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.commitsIn_valid.isDefined) {
+    io.commitsIn_valid.get <> exeUnits.map(_.commitio_valid).filter(_.isDefined).map(_.get).flatten
   }
 
   for ((iss, i) <- io.issue.zipWithIndex) {

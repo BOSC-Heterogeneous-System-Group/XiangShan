@@ -101,6 +101,9 @@ class ExeUnit(config: ExuConfig)(implicit p: Parameters) extends Exu(config) {
   val matuModules =  functionUnits.filter(_.isInstanceOf[Matu]).map(_.asInstanceOf[Matu])
   if (matuModules.nonEmpty) {
     matuModules.head.io.ldIn.get <> ldio.get
+    matuModules.head.io.dpIn.get <> dpio.get
+    matuModules.head.io.commitIn_pc.get <> commitio_pc.get
+    matuModules.head.io.commitIn_valid.get <> commitio_valid.get
   }
 
   if (config.readIntRf) {
