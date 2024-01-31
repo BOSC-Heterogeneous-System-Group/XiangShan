@@ -54,7 +54,7 @@ class ExuBlock(
 }
 
 class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp(outer)
-  with HasWritebackSourceImp with HasPerfEvents {
+  with HasWritebackSourceImp with HasPerfEvents with HasXSParameter {
   val scheduler = outer.scheduler.module
 
   val fuConfigs = outer.fuConfigs
@@ -69,6 +69,7 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     // dispatch ports
     val allocPregs = scheduler.io.allocPregs.cloneType
     val in = scheduler.io.in.cloneType
+    val dpIn = Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))
     // issue and wakeup ports
     val issue = if (numOutFu > 0) Some(Vec(numOutFu, DecoupledIO(new ExuInput))) else None
     val fastUopOut = scheduler.io.fastUopOut.cloneType
@@ -77,6 +78,9 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val fuWriteback = fuBlock.io.writeback.cloneType
     // from mem
     val ldIn = Vec(2, Flipped(DecoupledIO(new ExuOutput)))
+    // from rob
+    val commitsIn_pc = Vec(CommitWidth, Input(UInt(VAddrBits.W)))
+    val commitsIn_valid = Vec(CommitWidth, Input(Bool()))
     // extra
     val scheExtra = scheduler.io.extra.cloneType
     val fuExtra = fuBlock.io.extra.cloneType
@@ -109,6 +113,18 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
 
   if (fuBlock.io.ldIn.isDefined) {
     fuBlock.io.ldIn.get <> io.ldIn
+  }
+
+  if (fuBlock.io.dpIn.isDefined) {
+    fuBlock.io.dpIn.get <> io.dpIn
+  }
+
+  if (fuBlock.io.commitsIn_pc.isDefined) {
+    fuBlock.io.commitsIn_pc.get <> io.commitsIn_pc
+  }
+
+  if (fuBlock.io.commitsIn_valid.isDefined) {
+    fuBlock.io.commitsIn_valid.get <> io.commitsIn_valid
   }
 
   // To reduce fanout, we add registers here for redirect.

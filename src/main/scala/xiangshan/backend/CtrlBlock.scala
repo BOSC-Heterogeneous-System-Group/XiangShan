@@ -198,12 +198,15 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     // to exu blocks
     val allocPregs = Vec(RenameWidth, Output(new ResetPregStateReq))
     val dispatch = Vec(3*dpParams.IntDqDeqWidth, DecoupledIO(new MicroOp))
+    val dispatch2mpu = Vec(2*dpParams.IntDqDeqWidth, DecoupledIO(new MicroOp))
     val rsReady = Vec(outer.dispatch2.map(_.module.io.out.length).sum, Input(Bool()))
     val enqLsq = Flipped(new LsqEnqIO)
     val lqCancelCnt = Input(UInt(log2Up(LoadQueueSize + 1).W))
     val sqCancelCnt = Input(UInt(log2Up(StoreQueueSize + 1).W))
     val sqDeq = Input(UInt(2.W))
     val ld_pc_read = Vec(exuParameters.LduCnt, Flipped(new FtqRead(UInt(VAddrBits.W))))
+    val commits_pc = Vec(CommitWidth, Output(UInt(VAddrBits.W)))
+    val commits_valid = Vec(CommitWidth, Output(Bool()))
     // from int block
     val exuRedirect = Vec(exuParameters.AluCnt + exuParameters.JmpCnt, Flipped(ValidIO(new ExuOutput)))
     val stIn = Vec(exuParameters.StuCnt, Flipped(ValidIO(new ExuInput)))
@@ -265,6 +268,12 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     6 + exuParameters.LduCnt, 1, "CtrlPcMem")
   )
   val rob = outer.rob.module
+
+  for (i <- 0 until CommitWidth) {
+    io.commits_pc(i) := rob.io.commits.info(i).pc
+    io.commits_valid(i) := rob.io.commits.commitValid(i)
+  }
+
 
   pcMem.io.wen.head   := RegNext(io.frontend.fromFtq.pc_mem_wen)
   pcMem.io.waddr.head := RegNext(io.frontend.fromFtq.pc_mem_waddr)
@@ -486,6 +495,9 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
 
   val dpqOut = intDq.io.deq ++ lsDq.io.deq ++ fpDq.io.deq
   io.dispatch <> dpqOut
+
+  val dpqOut2mpu = intDq.io.deq ++ lsDq.io.deq
+  io.dispatch2mpu <> dpqOut2mpu
 
   for (dp2 <- outer.dispatch2.map(_.module.io)) {
     dp2.redirect := redirectForExu

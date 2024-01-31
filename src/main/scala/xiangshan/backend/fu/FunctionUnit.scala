@@ -73,9 +73,12 @@ class FunctionUnitInput(val len: Int)(implicit p: Parameters) extends XSBundle {
   val uop = new MicroOp
 }
 
-class FunctionUnitIO(val len: Int, cfg: ExuConfig)(implicit p: Parameters) extends XSBundle {
+class FunctionUnitIO(val len: Int, cfg: ExuConfig)(implicit p: Parameters) extends XSBundle with HasXSParameter{
   val in = Flipped(DecoupledIO(new FunctionUnitInput(len)))
   val ldIn = if (cfg == MatuExeUnitCfg) Some (Vec(2,  Flipped(DecoupledIO(new ExuOutput)))) else None
+  val dpIn = if (cfg == MatuExeUnitCfg) Some (Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
+  val commitIn_pc = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
+  val commitIn_valid = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(Bool()))) else None
   val out = DecoupledIO(new FuOutput(len))
 
   val redirectIn = Flipped(ValidIO(new Redirect))
