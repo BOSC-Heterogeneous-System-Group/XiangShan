@@ -11,7 +11,6 @@ import xiangshan.backend.exu.ExuParameters
 import xiangshan.backend.fu._
 
 class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with HasXSParameter{
-    val dataModule = Module(new XS_miniTPU_R)
     val rf2D = Module(new Regfile_2D_wrapper)
 
     val newReq = io.in.fire()
@@ -55,14 +54,47 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     val scoreboard = Module(new Scoreboard)
     scoreboard.io.dpIn.uop_in <> dp_in_uop_w
     scoreboard.io.dpIn.valid_in <> dp_in_valid_w
-    scoreboard.io.commitsIn.commits_pc <> io.commitIn_pc.get
-    scoreboard.io.commitsIn.commits_valid <> io.commitIn_valid.get
-    scoreboard.io.wbIn.wen <> rf2D.io.wbInfoOut.wen
-    scoreboard.io.wbIn.waddr <> rf2D.io.wbInfoOut.waddr
-    scoreboard.io.wbIn.woffset <> rf2D.io.wbInfoOut.woffset
+    scoreboard.io.commitsIO.commits_pc <> io.commitIn_pc.get
+    scoreboard.io.commitsIO.commits_valid <> io.commitIn_valid.get
+    rf2D.io.commitsIn.waw := scoreboard.io.commitsIO.waw
+    scoreboard.io.wbIn.wen(0) := rf2D.io.wbInfoOut.ld_wen(0)
+    scoreboard.io.wbIn.wen(1) := rf2D.io.wbInfoOut.ld_wen(1)
+    scoreboard.io.wbIn.wen(2) := rf2D.io.wbInfoOut.fu_wen
+    scoreboard.io.wbIn.waddr(0) := rf2D.io.wbInfoOut.ld_waddr(0)
+    scoreboard.io.wbIn.waddr(1) := rf2D.io.wbInfoOut.ld_waddr(1)
+    scoreboard.io.wbIn.waddr(2) := rf2D.io.wbInfoOut.fu_waddr
+    scoreboard.io.wbIn.woffset(0) := rf2D.io.wbInfoOut.ld_woffset(0)
+    scoreboard.io.wbIn.woffset(1) := rf2D.io.wbInfoOut.ld_woffset(1)
+    scoreboard.io.wbIn.woffset(2) := 3.U
+
+    val ex_instr_w = dontTouch(Wire(UInt(32.W)))
+    val ex_valid_w = dontTouch(Wire(Bool()))
+    val rs1_w = dontTouch(Wire(UInt(3.W)))
+    val rs2_w = dontTouch(Wire(UInt(3.W)))
+    val rd_w = dontTouch(Wire(UInt(3.W)))
+    ex_instr_w := scoreboard.io.fuIO.instr_out
+    ex_valid_w := scoreboard.io.fuIO.valid_out
+    rs1_w := Mux(ex_valid_w, scoreboard.io.fuIO.rs1_out, 0.U)
+    rs2_w := Mux(ex_valid_w, scoreboard.io.fuIO.rs2_out, 0.U)
+    rd_w := Mux(ex_valid_w, scoreboard.io.fuIO.rd_out, 0.U)
+
+    rf2D.io.fuIO.raddr_in(0) := rs1_w
+    rf2D.io.fuIO.raddr_in(1) := rs2_w
+    rf2D.io.fuIO.waddr_in := rd_w
+
+    val MTU = Module (new Mtest)
+    MTU.io.rs1_data <> rf2D.io.fuIO.rdata_out(0)
+    MTU.io.rs2_data <> rf2D.io.fuIO.rdata_out(1)
+    MTU.io.valid_in := scoreboard.io.fuIO.valid_out
+    rf2D.io.fuIO.valid_in := MTU.io.valid_out
+    rf2D.io.fuIO.wdata_in <> MTU.io.rd_data
+    scoreboard.io.fuIO.ready_in := MTU.io.ready_out
 
 
-    dataModule.io.xsIO.in.bits.src := io.in.bits.src.take(2)
+
+
+
+/*  dataModule.io.xsIO.in.bits.src := io.in.bits.src.take(2)
     dataModule.io.xsIO.in.bits.OpType := uopReg.ctrl.fuOpType
 
     io.in.ready := dataModule.io.xsIO.in.ready
@@ -70,7 +102,13 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     dataModule.io.xsIO.out.ready := io.out.ready
     io.out.valid := dataModule.io.xsIO.out.valid
     io.out.bits.uop := uopReg
-    io.out.bits.data := dataModule.io.xsIO.out.bits.data
+    io.out.bits.data := dataModule.io.xsIO.out.bits.data */
+
+    io.in.ready := io.out.ready
+    io.out.valid := io.in.valid
+    io.out.bits.uop <> io.in.bits.uop
+    io.out.bits.data := io.in.bits.src(0)
+
 }
 
 

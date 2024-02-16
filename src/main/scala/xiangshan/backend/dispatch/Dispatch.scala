@@ -121,6 +121,11 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
       updatedUop(i).psrc(0) := 0.U
     }
 
+    when (io.fromRename(i).bits.isMTEST) {
+      updatedUop(i).psrc(0) := 0.U
+      updatedUop(i).psrc(1) := 0.U
+    }
+
     io.lfst.req(i).valid := io.fromRename(i).fire() && updatedUop(i).cf.storeSetHit
     io.lfst.req(i).bits.isstore := isStore(i)
     io.lfst.req(i).bits.ssid := updatedUop(i).cf.ssid
