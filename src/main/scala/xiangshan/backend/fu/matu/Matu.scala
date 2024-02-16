@@ -54,8 +54,9 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     val scoreboard = Module(new Scoreboard)
     scoreboard.io.dpIn.uop_in <> dp_in_uop_w
     scoreboard.io.dpIn.valid_in <> dp_in_valid_w
-    scoreboard.io.commitsIn.commits_pc <> io.commitIn_pc.get
-    scoreboard.io.commitsIn.commits_valid <> io.commitIn_valid.get
+    scoreboard.io.commitsIO.commits_pc <> io.commitIn_pc.get
+    scoreboard.io.commitsIO.commits_valid <> io.commitIn_valid.get
+    rf2D.io.commitsIn.waw := scoreboard.io.commitsIO.waw
     scoreboard.io.wbIn.wen(0) := rf2D.io.wbInfoOut.ld_wen(0)
     scoreboard.io.wbIn.wen(1) := rf2D.io.wbInfoOut.ld_wen(1)
     scoreboard.io.wbIn.wen(2) := rf2D.io.wbInfoOut.fu_wen
