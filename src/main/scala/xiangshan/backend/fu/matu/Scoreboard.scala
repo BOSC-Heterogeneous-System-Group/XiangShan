@@ -281,9 +281,23 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     rs2_ready_array(i) := Mux(real_rs2MatchVec.asUInt.andR, s_ready, s_unready)
   }
 
+  /** WAW
+   * Handle write after write hazard
+   * */
+  val rd_ready_array = dontTouch(RegInit(VecInit(Seq.fill(32)(s_ready))))
+  for (i <- 0 until 32) {
+    val m_wawMatchVec = dontTouch(Wire(Vec(i, Bool())))
+    for (j <- 0 until i) {
+      m_wawMatchVec(j) := rd_array(j) === rd_array(i) && (OpType_array(i) === MATUOpType.mtest || OpType_array(i) === MATUOpType.mmul) && (state_array(j) === s_wait || state_array(j) === s_commit) &&
+        (state_array(i) === s_commit || (state_array(i) === s_wait && next_state_array(i) === s_commit)) && ((OpType_array(j) === LSUOpType.mld && offset_array(i) === offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
+        OpType_array(j) === MATUOpType.mtest))
+    }
+    rd_ready_array(i) := Mux(m_wawMatchVec.asUInt.orR, s_unready, s_ready)
+  }
+
   val rs_ready_vec = Wire(Vec(32, Bool()))
   for (i <- 0 until 32) {
-    rs_ready_vec(i) := rs1_ready_array(i) === s_ready && rs2_ready_array(i) === s_ready &&
+    rs_ready_vec(i) := rs1_ready_array(i) === s_ready && rs2_ready_array(i) === s_ready && rd_ready_array(i) === s_ready &&
                       (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) &&
                       (state_array(i) === s_wait || state_array(i) === s_commit)
   }
@@ -298,18 +312,18 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   /** WAW
    * Handle write after write hazard
    * */
-  val waw_vec = Wire(Vec(32, Bool()))
+  val ld_waw_vec = Wire(Vec(32, Bool()))
   for (i <- 0 until 32) {
-    val wawMatchVec = dontTouch(Wire(Vec(i, Bool())))
+    val ld_wawMatchVec = dontTouch(Wire(Vec(i, Bool())))
     for (j <- 0 until i) {
-      wawMatchVec(j) := rd_array(j) === rd_array(i) && OpType_array(i) === LSUOpType.mld && (state_array(j) === s_wait || state_array(j) === s_commit) &&
+      ld_wawMatchVec(j) := rd_array(j) === rd_array(i) && OpType_array(i) === LSUOpType.mld && (state_array(j) === s_wait || state_array(j) === s_commit) &&
         (state_array(i) === s_commit || (state_array(i) === s_wait && next_state_array(i) === s_commit)) && ((OpType_array(j) === LSUOpType.mld && offset_array(i) === offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
                     OpType_array(j) === MATUOpType.mtest))
     }
-    waw_vec(i) := wawMatchVec.asUInt.orR
+    ld_waw_vec(i) := ld_wawMatchVec.asUInt.orR
   }
 
-  io.commitsIO.waw := waw_vec(PriorityEncoder(waw_vec))
+  io.commitsIO.waw := ld_waw_vec(PriorityEncoder(ld_waw_vec))
 
   /**  WAR
    * Handle write after read hazard
