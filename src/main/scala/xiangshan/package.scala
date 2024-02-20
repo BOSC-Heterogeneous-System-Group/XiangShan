@@ -516,6 +516,8 @@ package object xiangshan {
 
   object MATUOpType {
     def mmul = "b0000".U
+    def mvmul = "b0001".U
+    def vvmul = "b0010".U
   }
 
   object ExceptionNO {
