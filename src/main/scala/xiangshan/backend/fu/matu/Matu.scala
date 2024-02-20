@@ -52,7 +52,9 @@ class XS_miniTPU_R(implicit p: Parameters) extends XSModule{
     val inBridge  = Module(new InputBridge_R())
     val mini_tpu  = Module(new top_R(4,16,2,2))
     val outBridge = Module(new OutputBridge_R())
-
+    //fuoptype = MM
+    
+    //Mux(io.xsIO.in.bits.OpType === MATUOpType.mmul,  inBridge.io.result.asUInt, 0.U(XLEN.W))
     inBridge.io.in_valid  := io.xsIO.in.valid
     io.xsIO.in.ready      := inBridge.io.out_ready
     inBridge.io.src(0) := io.xsIO.in.bits.src(0).asSInt
@@ -70,7 +72,7 @@ class XS_miniTPU_R(implicit p: Parameters) extends XSModule{
 
     outBridge.io.in_ready := io.xsIO.out.ready
     io.xsIO.out.valid     := outBridge.io.out_valid
-    io.xsIO.out.bits.data := Mux(io.xsIO.in.bits.OpType === MATUOpType.mmul,  outBridge.io.result.asUInt, 0.U(XLEN.W))
+    io.xsIO.out.bits.data := Mux(io.xsIO.in.bits.OpType === MATUOpType.mmul,  outBridge.io.result.asUInt, outBridge.io.result.asUInt)
 
 }
 
