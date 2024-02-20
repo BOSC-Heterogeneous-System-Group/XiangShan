@@ -407,7 +407,7 @@ trait HasXSParameter {
   val l2tlbParams = coreParams.l2tlbParameters
   val NumPerfCounters = coreParams.NumPerfCounters
 
-  val NumRs = (exuParameters.JmpCnt+1)/2 + (exuParameters.AluCnt+1)/2 +
+  val NumRs = (exuParameters.JmpCnt+1)/2 + (exuParameters.AluCnt+1)/2 + (exuParameters.MulCnt+1)/2 +
               (exuParameters.MulCnt+1)/2 +
               (exuParameters.MduCnt+1)/2 + (exuParameters.FmacCnt+1)/2 + (exuParameters.FmiscCnt+1)/2 +
               (exuParameters.FmiscDivSqrtCnt+1)/2 + (exuParameters.LduCnt+1)/2 +
