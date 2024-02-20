@@ -24,6 +24,7 @@ class commits_rf_in(implicit p: Parameters) extends XSBundle {
   val commits_pc = Input(Vec(CommitWidth, UInt(VAddrBits.W)))
   val commits_valid = Input(Vec(CommitWidth, Bool()))
   val waw = Input(Bool())
+  val war = Input(Bool())
 
 }
 
@@ -43,7 +44,7 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
     val wbInfoOut = new writeback_info()
   })
 
-  val s_idle :: s_hold :: s_wb :: Nil = Enum(3)
+  val s_idle :: s_hold :: s_wb :: s_waw :: s_war :: s_mix :: Nil = Enum(6)
 
   val rf2D =  Module(new Regfile_2D)
 
@@ -68,11 +69,25 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
   val buffer_state = dontTouch(RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(s_idle))))
   val writePtr = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
   val commitPtr = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
+  val wawPtr = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
+  val warPtr = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
+  val commitPtr_r = RegNext(commitPtr)
   val readPtr = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
   val last_readPtr = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
-  val hold_cnt = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
+  val waw_hold_cnt = RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W))))
+  val war_hold_cnt = dontTouch(RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(0.U(4.W)))))
+  val hazard_state = dontTouch(RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(s_idle))))
 
   last_readPtr <> readPtr
+
+  for (i <- 0 until exuParameters.LduCnt) {
+    wawPtr(i) := Mux(io.commitsIn.waw, commitPtr(i), wawPtr(i))
+  }
+
+  for (i <- 0 until exuParameters.LduCnt) {
+    warPtr(i) := Mux(io.commitsIn.war, commitPtr(i), warPtr(i))
+  }
+
 
   for (i <- 0 until exuParameters.LduCnt) {
     when (ld_wr_en(i) === true.B) {
@@ -107,17 +122,19 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
         io.commitsIn.commits_valid(j) && io.commitsIn.commits_pc(j) === pc_buffer(i)(commitPtr(i))
       )
 
-      when (commit_flag.reduce(_||_) && io.commitsIn.waw) {
+      when (commit_flag.reduce(_||_) && (io.commitsIn.waw  || io.commitsIn.war)) {
         buffer_state(i) := s_hold
         commitPtr(i) := commitPtr(i) + 1.U
-      }.elsewhen(commit_flag.reduce(_||_) && !io.commitsIn.waw) {
+      }.elsewhen(commit_flag.reduce(_||_) && !io.commitsIn.waw && !io.commitsIn.war) {
         buffer_state(i) := s_wb
         commitPtr(i) := commitPtr(i) + 1.U
         readPtr(i) := readPtr(i) + 1.U
-      }.elsewhen(buffer_state(i) === s_hold && !io.commitsIn.waw) {
+      }.elsewhen(buffer_state(i) === s_hold && ((!io.commitsIn.waw && (readPtr(i) < wawPtr(i))) || (!io.commitsIn.war && (readPtr(i) < warPtr(i))))) {
         buffer_state(i) := s_wb
         readPtr(i) := readPtr(i) + 1.U
-      }.elsewhen(!commit_flag.reduce(_||_) && buffer_state(i) === s_wb && hold_cnt(i) === 0.U) {
+      }.elsewhen(buffer_state(i) === s_wb && ((io.commitsIn.war && (readPtr(i) === wawPtr(i))) || (io.commitsIn.waw && (readPtr(i) === warPtr(i))))) {
+        buffer_state(i) := s_hold
+      }.elsewhen(!commit_flag.reduce(_||_) && buffer_state(i) === s_wb && (readPtr(i) === commitPtr(i))) {
         buffer_state(i) := s_idle
       }
 
@@ -139,14 +156,21 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
         io.wbInfoOut.ld_wen(i) := false.B
         io.wbInfoOut.ld_waddr(i) := 0.U
         io.wbInfoOut.ld_woffset(i) := 3.U
-        hold_cnt(i) := hold_cnt(i) + 1.U
+        when(io.commitsIn.waw) {
+          waw_hold_cnt(i) := waw_hold_cnt(i) + 1.U
+        }
+        when(io.commitsIn.war) {
+          war_hold_cnt(i) := war_hold_cnt(i) + 1.U
+        }
+
       }.elsewhen(buffer_state(i) === s_wb) {
         rf2D.io.ld_wr_en(i) := true.B
         rf2D.io.ld_waddr(i) := waddr_buffer(i)(last_readPtr(i))
         rf2D.io.ld_woffset(i) := woffset_buffer(i)(last_readPtr(i))
         rf2D.io.ld_wdata(i) := wdata_buffer(i)(last_readPtr(i))
-        hold_cnt(i) := Mux(hold_cnt(i) > 1.U, hold_cnt(i) - 1.U, 0.U)
-        when (hold_cnt(i) > 0.U) {
+        waw_hold_cnt(i) := Mux(waw_hold_cnt(i) > 1.U, waw_hold_cnt(i) - 1.U, 0.U)
+        war_hold_cnt(i) := Mux(war_hold_cnt(i) > 1.U, war_hold_cnt(i) - 1.U, 0.U)
+        when (((readPtr(i) < wawPtr(i)) && !io.commitsIn.waw) || ((readPtr(i) < warPtr(i)) && !io.commitsIn.war)) {
           readPtr(i) := readPtr(i) + 1.U
         }
 

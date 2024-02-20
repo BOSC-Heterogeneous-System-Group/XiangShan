@@ -28,6 +28,7 @@ class commits_scb_io(implicit p: Parameters) extends XSBundle {
   val commits_pc = Input(Vec(CommitWidth,  UInt(VAddrBits.W)))
   val commits_valid = Input(Vec(CommitWidth, Bool()))
   val waw = Output(Bool())
+  val war = Output(Bool())
 }
 
 class writeback_in(implicit p: Parameters) extends XSBundle {
@@ -299,17 +300,32 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * */
   val waw_vec = Wire(Vec(32, Bool()))
   for (i <- 0 until 32) {
-    val rdMatchVec = dontTouch(Wire(Vec(i, Bool())))
+    val wawMatchVec = dontTouch(Wire(Vec(i, Bool())))
     for (j <- 0 until i) {
-      rdMatchVec(j) := rd_array(j) === rd_array(i) && OpType_array(i) === LSUOpType.mld && (state_array(j) === s_wait || state_array(j) === s_commit) &&
+      wawMatchVec(j) := rd_array(j) === rd_array(i) && OpType_array(i) === LSUOpType.mld && (state_array(j) === s_wait || state_array(j) === s_commit) &&
         (state_array(i) === s_commit || (state_array(i) === s_wait && next_state_array(i) === s_commit)) && ((OpType_array(j) === LSUOpType.mld && offset_array(i) === offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
                     OpType_array(j) === MATUOpType.mtest))
     }
-    waw_vec(i) := rdMatchVec.asUInt.orR
+    waw_vec(i) := wawMatchVec.asUInt.orR
   }
 
   io.commitsIO.waw := waw_vec(PriorityEncoder(waw_vec))
 
+  /**  WAR
+   * Handle write after read hazard
+   * */
+  val war_vec = Wire(Vec(32, Bool()))
+  for (i <- 0 until 32) {
+    val warMatchVec = dontTouch(Wire(Vec(i, Bool())))
+    for (j <- 0 until i) {
+      warMatchVec(j) := (rs1_array(j) === rd_array(i) || rs2_array(j) === rd_array(i)) && OpType_array(i) === LSUOpType.mld && (state_array(j) === s_wait || state_array(j) === s_commit) &&
+        (state_array(i) === s_commit || (state_array(i) === s_wait && next_state_array(i) === s_commit)) && ((OpType_array(j) === LSUOpType.mld && offset_array(i) === offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
+        OpType_array(j) === MATUOpType.mtest))
+    }
+    war_vec(i) := warMatchVec.asUInt.orR
+  }
+
+  io.commitsIO.war := war_vec(PriorityEncoder(war_vec))
 
 
   /** dequeue
