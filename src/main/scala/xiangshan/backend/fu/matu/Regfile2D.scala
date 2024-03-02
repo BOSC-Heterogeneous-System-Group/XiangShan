@@ -20,11 +20,13 @@ class fu_rf_in(implicit p: Parameters) extends XSBundle {
   val rdata_out = Output(Vec(2, Vec(2, UInt(XLEN.W))))
 }
 
-class commits_rf_in(implicit p: Parameters) extends XSBundle {
+class commits_rf_io(implicit p: Parameters) extends XSBundle {
   val commits_pc = Input(Vec(CommitWidth, UInt(VAddrBits.W)))
   val commits_valid = Input(Vec(CommitWidth, Bool()))
   val waw = Input(Bool())
   val war = Input(Bool())
+  val commitPtr = Output(Vec(exuParameters.LduCnt, UInt(4.W)))
+  val commitPC = Output(Vec(exuParameters.LduCnt, UInt(VAddrBits.W)))
 
 }
 
@@ -40,7 +42,7 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
   val io = IO(new Bundle {
     val ldIn = new load_in()
     val fuIO = new fu_rf_in()
-    val commitsIn = new commits_rf_in()
+    val commitsIn = new commits_rf_io()
     val wbInfoOut = new writeback_info()
   })
 
@@ -79,6 +81,13 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
   val hazard_state = dontTouch(RegInit(VecInit(Seq.fill(exuParameters.LduCnt)(s_idle))))
 
   last_readPtr <> readPtr
+
+  io.commitsIn.commitPtr <> commitPtr
+
+  for (i <- 0 until exuParameters.LduCnt) {
+    io.commitsIn.commitPC(i) := pc_buffer(i)(readPtr(i))
+  }
+
 
   for (i <- 0 until exuParameters.LduCnt) {
     wawPtr(i) := Mux(io.commitsIn.waw, commitPtr(i), wawPtr(i))
@@ -119,15 +128,17 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
   for (i <- 0 until exuParameters.LduCnt) {
     {
       val commit_flag = Seq.tabulate(CommitWidth)(j =>
-        io.commitsIn.commits_valid(j) && io.commitsIn.commits_pc(j) === pc_buffer(i)(commitPtr(i))
-      )
-
+        io.commitsIn.commits_valid(j) && (io.commitsIn.commits_pc(j) === pc_buffer(i)(0) || io.commitsIn.commits_pc(j) === pc_buffer(i)(1) ||
+          io.commitsIn.commits_pc(j) === pc_buffer(i)(2) || io.commitsIn.commits_pc(j) === pc_buffer(i)(3) ||
+          io.commitsIn.commits_pc(j) === pc_buffer(i)(4) || io.commitsIn.commits_pc(j) === pc_buffer(i)(5) ||
+          io.commitsIn.commits_pc(j) === pc_buffer(i)(6) || io.commitsIn.commits_pc(j) === pc_buffer(i)(7))
+          )
       when (commit_flag.reduce(_||_) && (io.commitsIn.waw  || io.commitsIn.war)) {
         buffer_state(i) := s_hold
-        commitPtr(i) := commitPtr(i) + 1.U
+        commitPtr(i) := commitPtr(i) + PopCount(commit_flag)
       }.elsewhen(commit_flag.reduce(_||_) && !io.commitsIn.waw && !io.commitsIn.war) {
         buffer_state(i) := s_wb
-        commitPtr(i) := commitPtr(i) + 1.U
+        commitPtr(i) := commitPtr(i) + PopCount(commit_flag)
         readPtr(i) := readPtr(i) + 1.U
       }.elsewhen(buffer_state(i) === s_hold && ((!io.commitsIn.waw && (readPtr(i) < wawPtr(i))) || (!io.commitsIn.war && (readPtr(i) < warPtr(i))))) {
         buffer_state(i) := s_wb
@@ -170,7 +181,8 @@ class Regfile_2D_wrapper (implicit  p: Parameters) extends XSModule {
         rf2D.io.ld_wdata(i) := wdata_buffer(i)(last_readPtr(i))
         waw_hold_cnt(i) := Mux(waw_hold_cnt(i) > 1.U, waw_hold_cnt(i) - 1.U, 0.U)
         war_hold_cnt(i) := Mux(war_hold_cnt(i) > 1.U, war_hold_cnt(i) - 1.U, 0.U)
-        when (((readPtr(i) < wawPtr(i)) && !io.commitsIn.waw) || ((readPtr(i) < warPtr(i)) && !io.commitsIn.war)) {
+        when (((readPtr(i) < wawPtr(i)) && !io.commitsIn.waw) || ((readPtr(i) < warPtr(i)) && !io.commitsIn.war) ||
+          ((readPtr(i) < commitPtr(i)) && !io.commitsIn.waw && !io.commitsIn.war )) {
           readPtr(i) := readPtr(i) + 1.U
         }
 

@@ -27,6 +27,7 @@ class fu_io(implicit p: Parameters) extends XSBundle {
 class commits_scb_io(implicit p: Parameters) extends XSBundle {
   val commits_pc = Input(Vec(CommitWidth,  UInt(VAddrBits.W)))
   val commits_valid = Input(Vec(CommitWidth, Bool()))
+  val commitPC = Input(Vec(exuParameters.LduCnt, UInt(VAddrBits.W)))
   val waw = Output(Bool())
   val war = Output(Bool())
 }
@@ -200,9 +201,9 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
 
   val commitVec = Wire(Vec(3, Vec(32, Bool())))
   for (i <- 0 until 32) {
-    commitVec(0)(i) := state_array(i) === s_commit && io.wbIn.wen(0) && io.wbIn.waddr(0) === rd_array(i) && io.wbIn.woffset(0) === offset_array(i) &&
+    commitVec(0)(i) := (state_array(i) === s_commit || state_array(i) === s_wait) && io.wbIn.wen(0) && io.wbIn.waddr(0) === rd_array(i) && io.wbIn.woffset(0) === offset_array(i) &&
                        OpType_array(i) === LSUOpType.mld
-    commitVec(1)(i) := state_array(i) === s_commit && io.wbIn.wen(1) && io.wbIn.waddr(1) === rd_array(i) && io.wbIn.woffset(1) === offset_array(i) &&
+    commitVec(1)(i) := (state_array(i) === s_commit || state_array(i) === s_wait) && io.wbIn.wen(1) && io.wbIn.waddr(1) === rd_array(i) && io.wbIn.woffset(1) === offset_array(i) &&
                        OpType_array(i) === LSUOpType.mld
     commitVec(2)(i) := state_array(i) === s_commit && io.wbIn.wen(2) && io.wbIn.waddr(2) === rd_array(i) && rs1_ready_array(i) === s_ready && rs2_ready_array(i) === s_ready &&
                       (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest)
@@ -323,8 +324,12 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     ld_waw_vec(i) := ld_wawMatchVec.asUInt.orR
   }
 
-  io.commitsIO.waw := ld_waw_vec(PriorityEncoder(ld_waw_vec))
+  val s_wait_commmit_vec = Wire(Vec(32, Bool()))
+  for (i <- 0 until 32) {
+    s_wait_commmit_vec(i) :=  state_array(i) === s_commit || (state_array(i) === s_wait && next_state_array(i) === s_commit)
+  }
 
+  io.commitsIO.waw := ld_waw_vec(PriorityEncoder(ld_waw_vec))
   /**  WAR
    * Handle write after read hazard
    * */
