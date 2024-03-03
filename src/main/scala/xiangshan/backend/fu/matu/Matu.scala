@@ -12,6 +12,7 @@ import xiangshan.backend.fu._
 
 class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with HasXSParameter{
     val rf2D = Module(new Regfile_2D_wrapper)
+    val scoreboard = Module(new Scoreboard)
 
     val newReq = io.in.fire()
     val uop = io.in.bits.uop
@@ -28,9 +29,9 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     }
 
     for (i <- 0 until exuParameters.LduCnt) {
-        rf2D.io.ldIn.data_in(i) := load_in_data_w(i)
-        rf2D.io.ldIn.valid_in(i) := load_in_valid_w(i)
-        rf2D.io.ldIn.uop_in(i) := load_in_uop_w(i)
+        scoreboard.io.ldIn.data_in(i) := load_in_data_w(i)
+        scoreboard.io.ldIn.valid_in(i) := load_in_valid_w(i)
+        scoreboard.io.ldIn.uop_in(i) := load_in_uop_w(i)
     }
 
     io.ldIn.get(0).ready := true.B
@@ -42,8 +43,6 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
 
     val commit_info_r = dontTouch(Reg(Vec(CommitWidth, UInt(VAddrBits.W))))
     commit_info_r <> io.commitIn_pc.get
-    rf2D.io.commitsIn.commits_pc <> io.commitIn_pc.get
-    rf2D.io.commitsIn.commits_valid <> io.commitIn_valid.get
 
     val dp_in_uop_w = dontTouch(Wire(Vec(2*dpParams.IntDqDeqWidth, new MicroOp)))
     val dp_in_valid_w = dontTouch(Wire(Vec(2*dpParams.IntDqDeqWidth, Bool())))
@@ -51,23 +50,22 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
         dp_in_uop_w(i) := io.dpIn.get(i).bits
         dp_in_valid_w(i) := io.dpIn.get(i).valid
     }
-    val scoreboard = Module(new Scoreboard)
+
     scoreboard.io.dpIn.uop_in <> dp_in_uop_w
     scoreboard.io.dpIn.valid_in <> dp_in_valid_w
     scoreboard.io.commitsIO.commits_pc <> io.commitIn_pc.get
     scoreboard.io.commitsIO.commits_valid <> io.commitIn_valid.get
-    scoreboard.io.commitsIO.commitPC <> rf2D.io.commitsIn.commitPC
-    rf2D.io.commitsIn.waw := scoreboard.io.commitsIO.waw
-    rf2D.io.commitsIn.war := scoreboard.io.commitsIO.war
-    scoreboard.io.wbIn.wen(0) := rf2D.io.wbInfoOut.ld_wen(0)
-    scoreboard.io.wbIn.wen(1) := rf2D.io.wbInfoOut.ld_wen(1)
-    scoreboard.io.wbIn.wen(2) := rf2D.io.wbInfoOut.fu_wen
-    scoreboard.io.wbIn.waddr(0) := rf2D.io.wbInfoOut.ld_waddr(0)
-    scoreboard.io.wbIn.waddr(1) := rf2D.io.wbInfoOut.ld_waddr(1)
-    scoreboard.io.wbIn.waddr(2) := rf2D.io.wbInfoOut.fu_waddr
-    scoreboard.io.wbIn.woffset(0) := rf2D.io.wbInfoOut.ld_woffset(0)
-    scoreboard.io.wbIn.woffset(1) := rf2D.io.wbInfoOut.ld_woffset(1)
-    scoreboard.io.wbIn.woffset(2) := 3.U
+    scoreboard.io.wbIn.wen(0) := rf2D.io.wbInfoOut.ld_wen
+    scoreboard.io.wbIn.wen(1) := rf2D.io.wbInfoOut.fu_wen
+    scoreboard.io.wbIn.waddr(0) := rf2D.io.wbInfoOut.ld_waddr
+    scoreboard.io.wbIn.waddr(1) := rf2D.io.wbInfoOut.fu_waddr
+    scoreboard.io.wbIn.woffset(0) := rf2D.io.wbInfoOut.ld_woffset
+    scoreboard.io.wbIn.woffset(1) := 3.U
+
+    rf2D.io.ldIn.wdata_in := scoreboard.io.ldOut.data_out
+    rf2D.io.ldIn.waddr_in := scoreboard.io.ldOut.addr_out
+    rf2D.io.ldIn.woffset_in := scoreboard.io.ldOut.offset_out
+    rf2D.io.ldIn.valid_in := scoreboard.io.ldOut.wen
 
     val ex_instr_w = dontTouch(Wire(UInt(32.W)))
     val ex_valid_w = dontTouch(Wire(Bool()))
