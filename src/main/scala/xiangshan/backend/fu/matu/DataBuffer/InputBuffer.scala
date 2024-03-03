@@ -7,13 +7,13 @@ import chisel3.util._
 class SAInputBuffer(val IN_WIDTH: Int, val QUEUE_NUM: Int, val QUEUE_LEN: Int) extends Module {
   val io = IO(new Bundle {
     val ctrl_ib_data_out = Input(Bool())
-    val data_in = Flipped(DecoupledIO(Vec(QUEUE_NUM, SInt(IN_WIDTH.W))))
+    val data_in = Flipped(DecoupledIO(Vec(QUEUE_NUM, Vec(QUEUE_LEN, SInt(IN_WIDTH.W)))))
 
     val data_out = Output(Vec(QUEUE_NUM, SInt(IN_WIDTH.W)))
     val ib_data_in_done = Output(Bool())
   })
 
-  val data_queue = Seq.fill(QUEUE_NUM)(Module(new SyncFIFO(IN_WIDTH, QUEUE_LEN)))
+  val data_queue = Seq.fill(QUEUE_NUM)(Module(new MultiWritePortFIFO(IN_WIDTH, QUEUE_LEN)))
 
   // when delay_count count to 0, queue start to output data
   val delay_count = Reg(Vec(QUEUE_NUM, UInt(log2Ceil(QUEUE_NUM).W)))
@@ -32,7 +32,7 @@ class SAInputBuffer(val IN_WIDTH: Int, val QUEUE_NUM: Int, val QUEUE_LEN: Int) e
   for (i <- 0 until QUEUE_NUM) {
     data_queue(i).io.enq := io.data_in.fire
     data_queue(i).io.deq := state === data_out && delay_count(i) === 0.U && !data_queue(i).io.empty
-    data_queue(i).io.enqData := io.data_in.bits(i)
+    data_queue(i).io.enqData <> io.data_in.bits(i)
     io.data_out(i) := data_queue(i).io.deqData
   }
   io.data_in.ready := state === prepare

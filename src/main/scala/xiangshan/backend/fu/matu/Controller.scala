@@ -40,6 +40,7 @@ class Controller(val SA_ROWS: Int, val SA_COLS: Int) extends Module {
     val ctrl_ib_data_out  = Output(Bool())
     val ctrl_ob_data_in   = Output(Bool())
     val ctrl_sa_send_data = Output(Bool())  // sa send data to OutputBuffer
+    val ctrl_sa_isIdle    = Output(Bool())
   })
 
   // generate a pulse to inform InputBuffer
@@ -57,7 +58,7 @@ class Controller(val SA_ROWS: Int, val SA_COLS: Int) extends Module {
   val isStall = RegInit(false.B)
 
   // generate cal_done, meaning that calculation is done
-  val cal_gc       = Module(new GlobalCounter(3*SA_ROWS-2)) // todo ROWs和COLs取最大值
+  val cal_gc       = Module(new GlobalCounter(11)) // todo ROWs和COLs取最大值
   cal_gc.io.start := cal_gc_start
   when(cal_gc.io.tick) {
     cal_done := true.B
@@ -107,5 +108,7 @@ class Controller(val SA_ROWS: Int, val SA_COLS: Int) extends Module {
       out_done := false.B
     }
   }
+
+  io.ctrl_sa_isIdle := state === idle
 
 }
