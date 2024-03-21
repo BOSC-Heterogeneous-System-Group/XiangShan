@@ -25,6 +25,7 @@ import utils._
 import xiangshan._
 import xiangshan.backend.fu.fpu.{FMA, FPUSubModule}
 import xiangshan.backend.fu.matu.Matu
+import xiangshan.backend.Std
 import xiangshan.backend.fu.{CSR, FUWithRedirect, Fence, FenceToSbuffer}
 
 class FenceIO(implicit p: Parameters) extends XSBundle {
@@ -101,9 +102,24 @@ class ExeUnit(config: ExuConfig)(implicit p: Parameters) extends Exu(config) {
   val matuModules =  functionUnits.filter(_.isInstanceOf[Matu]).map(_.asInstanceOf[Matu])
   if (matuModules.nonEmpty) {
     matuModules.head.io.ldIn.get <> ldio.get
+    mpuout_data.get := matuModules.head.io.mpuOut_data.get
+    mpuout_addr.get := matuModules.head.io.mpuOut_addr.get
+    mpuout_uop.get <> matuModules.head.io.mpuOut_uop.get
+    mpuout_valid.get := matuModules.head.io.mpuOut_valid.get
     matuModules.head.io.dpIn.get <> dpio.get
     matuModules.head.io.commitIn_pc.get <> commitio_pc.get
     matuModules.head.io.commitIn_valid.get <> commitio_valid.get
+    matuModules.head.io.fire.get <> fire.get
+  }
+
+  val stdModules = functionUnits.filter(_.isInstanceOf[Std]).map(_.asInstanceOf[Std])
+  if (stdModules.nonEmpty) {
+    stdModules.head.io.stIn.get.bits := stin_data.get
+    stdModules.head.io.stIn.get.valid := stin_valid.get
+    stdModules.head.io.stuop.get <> stin_uop.get
+    stdModules(1).io.stIn.get.bits := stin_data.get
+    stdModules(1).io.stIn.get.valid := stin_valid.get
+    stdModules(1).io.stuop.get <> stin_uop.get
   }
 
   if (config.readIntRf) {

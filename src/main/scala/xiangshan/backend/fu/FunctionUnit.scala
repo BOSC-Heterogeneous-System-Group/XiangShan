@@ -79,6 +79,13 @@ class FunctionUnitIO(val len: Int, cfg: ExuConfig)(implicit p: Parameters) exten
   val dpIn = if (cfg == MatuExeUnitCfg) Some (Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
   val commitIn_pc = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
   val commitIn_valid = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(Bool()))) else None
+  val stIn = if(cfg == StdExeUnitCfg) Some(Flipped(ValidIO(UInt(XLEN.W)))) else None
+  val stuop = if(cfg == StdExeUnitCfg) Some(Input(new MicroOp)) else None
+  val fire = if(cfg == MatuExeUnitCfg) Some(Input(Bool())) else None
+  val mpuOut_data = if(cfg == MatuExeUnitCfg) Some (Output(UInt(XLEN.W))) else None
+  val mpuOut_addr = if (cfg == MatuExeUnitCfg) Some (Output(UInt(VAddrBits.W))) else None
+  val mpuOut_uop = if (cfg == MatuExeUnitCfg) Some (Output(new MicroOp)) else None
+  val mpuOut_valid = if(cfg == MatuExeUnitCfg) Some (Output(Bool())) else None
   val out = DecoupledIO(new FuOutput(len))
 
   val redirectIn = Flipped(ValidIO(new Redirect))

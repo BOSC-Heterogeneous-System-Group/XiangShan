@@ -180,6 +180,7 @@ class Sbuffer(implicit p: Parameters) extends DCacheModule with HasSbufferConst 
   val io = IO(new Bundle() {
     val hartId = Input(UInt(8.W))
     val in = Vec(StorePipelineWidth, Flipped(Decoupled(new DCacheWordReqWithVaddr)))  //Todo: store logic only support Width == 2 now
+    val isMSD = Input(Vec(StorePipelineWidth, Bool()))
     val dcache = Flipped(new DCacheToSbufferIO)
     val forward = Vec(LoadPipelineWidth, Flipped(new LoadForwardQueryIO))
     val sqempty = Input(Bool())
