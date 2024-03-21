@@ -23,6 +23,7 @@ import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import utils._
 import xiangshan._
 import xiangshan.backend.exu._
+import xiangshan.backend.fu._
 
 class ExuBlock(
                 val configs: Seq[(ExuConfig, Int, Seq[ExuConfig], Seq[ExuConfig])],
@@ -78,6 +79,14 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val fuWriteback = fuBlock.io.writeback.cloneType
     // from mem
     val ldIn = Vec(2, Flipped(DecoupledIO(new ExuOutput)))
+    // from stu
+    val fire = Input(Bool())
+    // to mem
+    val stOut = ValidIO(UInt(XLEN.W))
+    val saddr = Output(UInt(VAddrBits.W))
+    val suop = Output(new MicroOp)
+    // to std
+    val stIn = Flipped(ValidIO(UInt(XLEN.W)))
     // from rob
     val commitsIn_pc = Vec(CommitWidth, Input(UInt(VAddrBits.W)))
     val commitsIn_valid = Vec(CommitWidth, Input(Bool()))
@@ -125,6 +134,34 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
 
   if (fuBlock.io.commitsIn_valid.isDefined) {
     fuBlock.io.commitsIn_valid.get <> io.commitsIn_valid
+  }
+
+  if (fuBlock.io.mpuOut_data.isDefined) {
+    io.stOut.bits := fuBlock.io.mpuOut_data.get
+  }
+
+  if (fuBlock.io.mpuOut_valid.isDefined) {
+    io.stOut.valid := fuBlock.io.mpuOut_valid.get
+  }
+
+  if (fuBlock.io.stIn_data.isDefined) {
+    fuBlock.io.stIn_data.get := io.stIn.bits
+  }
+
+  if (fuBlock.io.stIn_valid.isDefined) {
+    fuBlock.io.stIn_valid.get := io.stIn.valid
+  }
+
+  if (fuBlock.io.mpuOut_addr.isDefined) {
+    io.saddr := fuBlock.io.mpuOut_addr.get
+  }
+
+  if (fuBlock.io.mpuOut_uop.isDefined) {
+    io.suop <> fuBlock.io.mpuOut_uop.get
+  }
+
+  if (fuBlock.io.fire.isDefined) {
+    fuBlock.io.fire.get := io.fire
   }
 
   // To reduce fanout, we add registers here for redirect.

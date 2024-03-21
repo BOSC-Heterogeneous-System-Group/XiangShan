@@ -273,6 +273,20 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
 
   exuBlocks.head.io.ldIn(0) <> memBlock.io.ldout_dup(0)
   exuBlocks.head.io.ldIn(1) <> memBlock.io.ldout_dup(1)
+  memBlock.io.mpuValid <> exuBlocks.head.io.stOut.valid
+  memBlock.io.mpuData <> exuBlocks.head.io.stOut.bits
+  memBlock.io.mpuAddr <> exuBlocks.head.io.saddr
+  memBlock.io.mpuUop <> exuBlocks.head.io.suop
+  exuBlocks.head.io.fire := memBlock.io.fire
+
+
+  val mpu_valid_w = Wire(Bool())
+  val mpu_data_w = Wire(UInt(XLEN.W))
+  mpu_valid_w := exuBlocks.head.io.stOut.valid
+  mpu_data_w := exuBlocks.head.io.stOut.bits
+  exuBlocks.head.io.stIn.valid := mpu_valid_w
+  exuBlocks.head.io.stIn.bits := mpu_data_w
+
 
 //  MPU.io.lsuIO.ldIn(0) <> memBlock.io.ldout_dup(0)
 //  MPU.io.lsuIO.ldIn(1) <> memBlock.io.ldout_dup(1)

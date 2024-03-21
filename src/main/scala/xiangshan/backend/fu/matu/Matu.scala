@@ -14,9 +14,9 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     val rf2D = Module(new Regfile_2D_wrapper)
     val scoreboard = Module(new Scoreboard)
 
-    val newReq = io.in.fire()
+    val newsdReq = io.in.fire() && io.in.bits.uop.ctrl.fuOpType === LSUOpType.sd
     val uop = io.in.bits.uop
-    val uopReg = RegEnable(uop, newReq)
+    val uopReg = RegEnable(uop, newsdReq)
 
     val load_in_data_w = dontTouch(Wire(Vec(exuParameters.LduCnt, UInt(XLEN.W))))
     val load_in_valid_w = dontTouch(Wire(Vec(exuParameters.LduCnt, Bool())))
@@ -67,12 +67,21 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     rf2D.io.ldIn.woffset_in := scoreboard.io.ldOut.offset_out
     rf2D.io.ldIn.valid_in := scoreboard.io.ldOut.wen
 
-    val ex_instr_w = dontTouch(Wire(UInt(32.W)))
+    rf2D.io.stIO.roffset_in := scoreboard.io.stOut.roffset_out
+    rf2D.io.stIO.raddr_in := scoreboard.io.stOut.raddr_out
+
+    io.mpuOut_data.get := rf2D.io.stIO.rdata_out
+    io.mpuOut_valid.get := scoreboard.io.stOut.store_flag
+    io.mpuOut_addr.get := scoreboard.io.stOut.saddr_out
+    io.mpuOut_uop.get <> uopReg
+
+    scoreboard.io.fire := io.fire.get
+
     val ex_valid_w = dontTouch(Wire(Bool()))
     val rs1_w = dontTouch(Wire(UInt(3.W)))
     val rs2_w = dontTouch(Wire(UInt(3.W)))
     val rd_r = dontTouch(Reg(UInt(3.W)))
-    ex_instr_w := scoreboard.io.fuIO.instr_out
+
     ex_valid_w := scoreboard.io.fuIO.valid_out
     rs1_w := Mux(ex_valid_w, scoreboard.io.fuIO.rs1_out, 0.U)
     rs2_w := Mux(ex_valid_w, scoreboard.io.fuIO.rs2_out, 0.U)
@@ -86,6 +95,7 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     rf2D.io.fuIO.waddr_in := rd_r
 
     val MPU = Module (new top_R(1, 8, 32, 2, 8, 2, 2))
+    //val MADD = Module (new Mtest())
 
     MPU.io.tpuIO.in.bits.in_a(0)(0) := rf2D.io.fuIO.rdata_out(0)(0)(7, 0).asSInt
     MPU.io.tpuIO.in.bits.in_a(0)(1) := rf2D.io.fuIO.rdata_out(0)(0)(15, 8).asSInt
@@ -154,6 +164,10 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     io.out.valid := dataModule.io.xsIO.out.valid
     io.out.bits.uop := uopReg
     io.out.bits.data := dataModule.io.xsIO.out.bits.data */
+
+    scoreboard.io.rsIn.uop_in <> io.in.bits.uop
+    scoreboard.io.rsIn.valid_in := io.in.valid
+    scoreboard.io.rsIn.src := io.in.bits.src(0)
 
     io.in.ready := io.out.ready
     io.out.valid := io.in.valid

@@ -30,6 +30,9 @@ import xiangshan.cache.mmu.{TlbCmd, TlbReq, TlbRequestIO, TlbResp}
 class StoreUnit_S0(implicit p: Parameters) extends XSModule {
   val io = IO(new Bundle() {
     val in = Flipped(Decoupled(new ExuInput))
+    val mpuValid = Input(Bool())
+    val mpuUop = Input(new MicroOp)
+    val mpuAddr = Input(UInt(VAddrBits.W))
     val rsIdx = Input(UInt(log2Up(IssQueSize).W))
     val isFirstIssue = Input(Bool())
     val out = Decoupled(new LsPipelineBundle)
@@ -69,6 +72,7 @@ class StoreUnit_S0(implicit p: Parameters) extends XSModule {
   io.out.valid := io.in.valid
   io.in.ready := io.out.ready
 
+
   // exception check
   val addrAligned = LookupTree(io.in.bits.uop.ctrl.fuOpType(1,0), List(
     "b00".U   -> true.B,              //b
@@ -92,6 +96,8 @@ class StoreUnit_S0(implicit p: Parameters) extends XSModule {
 class StoreUnit_S1(implicit p: Parameters) extends XSModule {
   val io = IO(new Bundle() {
     val in = Flipped(Decoupled(new LsPipelineBundle))
+    val mpuData = Input(UInt(XLEN.W))
+    val mpuValid = Input(Bool())
     val out = Decoupled(new LsPipelineBundle)
     val lsq = ValidIO(new LsPipelineBundle())
     val dtlbResp = Flipped(DecoupledIO(new TlbResp()))
@@ -115,7 +121,8 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule {
   // Send TLB feedback to store issue queue
   // Store feedback is generated in store_s1, sent to RS in store_s2
   io.rsFeedback.valid := io.in.valid
-  io.rsFeedback.bits.hit := !s1_tlb_miss
+  io.rsFeedback.bits.hit := (!s1_tlb_miss && !(io.in.bits.uop.cf.instr(6, 0) === "b0101011".U)) ||
+                            (!s1_tlb_miss && (io.in.bits.uop.cf.instr(6, 0) === "b0101011".U) && io.mpuValid)//TODO: add mpu cond
   io.rsFeedback.bits.flushState := io.dtlbResp.bits.ptwBack
   io.rsFeedback.bits.rsIdx := io.in.bits.rsIdx
   io.rsFeedback.bits.sourceType := RSFeedbackType.tlbMiss
@@ -128,7 +135,8 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule {
 
   // get paddr from dtlb, check if rollback is needed
   // writeback store inst to lsq
-  io.out.valid := io.in.valid && !s1_tlb_miss
+  io.out.valid := io.in.valid && ((!s1_tlb_miss && !(io.in.bits.uop.cf.instr(6, 0) === "b0101011".U)) ||
+                  (!s1_tlb_miss && (io.in.bits.uop.cf.instr(6, 0) === "b0101011".U) && io.mpuValid))
   io.out.bits := io.in.bits
   io.out.bits.paddr := s1_paddr
   io.out.bits.miss := false.B
@@ -138,7 +146,9 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule {
 
   io.lsq.valid := io.in.valid
   io.lsq.bits := io.out.bits
-  io.lsq.bits.miss := s1_tlb_miss
+  io.lsq.bits.miss := (s1_tlb_miss && !(io.in.bits.uop.cf.instr(6, 0) === "b0101011".U)) ||
+                      (s1_tlb_miss || ((io.in.bits.uop.cf.instr(6, 0) === "b0101011".U) && !io.mpuValid))//TODO: add mpu cond
+  io.lsq.bits.data := io.mpuData
 
   // mmio inst with exception will be writebacked immediately
   // io.out.valid := io.in.valid && (!io.out.bits.mmio || s1_exception) && !s1_tlb_miss
@@ -199,6 +209,10 @@ class StoreUnit_S3(implicit p: Parameters) extends XSModule {
 class StoreUnit(implicit p: Parameters) extends XSModule {
   val io = IO(new Bundle() {
     val stin = Flipped(Decoupled(new ExuInput))
+    val mpuValid = Input(Bool())
+    val mpuData = Input(UInt(XLEN.W))
+    val mpuUop = Input(new MicroOp)
+    val mpuAddr = Input(UInt(VAddrBits.W))
     val redirect = Flipped(ValidIO(new Redirect))
     val feedbackSlow = ValidIO(new RSFeedback)
     val tlb = new TlbRequestIO()
@@ -218,7 +232,11 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
   val store_s3 = Module(new StoreUnit_S3)
 
   store_s0.io.in <> io.stin
+  store_s0.io.mpuValid := io.mpuValid
+  store_s0.io.mpuUop <> io.mpuUop
+  store_s0.io.mpuAddr := io.mpuAddr
   store_s0.io.dtlbReq <> io.tlb.req
+
   io.tlb.req_kill := false.B
   store_s0.io.rsIdx := io.rsIdx
   store_s0.io.isFirstIssue := io.isFirstIssue
@@ -231,6 +249,8 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
 
 
   store_s1.io.dtlbResp <> io.tlb.resp
+  store_s1.io.mpuValid := io.mpuValid
+  store_s1.io.mpuData := io.mpuData
   io.lsq <> store_s1.io.lsq
 
   PipelineConnect(store_s1.io.out, store_s2.io.in, true.B, store_s1.io.out.bits.uop.robIdx.needFlush(io.redirect))

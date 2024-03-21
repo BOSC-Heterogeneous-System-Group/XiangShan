@@ -56,6 +56,7 @@ class DataBufferEntry (implicit p: Parameters)  extends DCacheBundle {
   val mask   = UInt((DataBits/8).W)
   val wline = Bool()
   val sqPtr  = new SqPtr
+  val isMSD = Bool()
 }
 
 // Store Queue
@@ -81,6 +82,9 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     val sqFull = Output(Bool())
     val sqCancelCnt = Output(UInt(log2Up(StoreQueueSize + 1).W))
     val sqDeq = Output(UInt(2.W))
+
+    val isMSD = Output(Vec(StorePipelineWidth, Bool()))
+    val fire = Output(Bool())
   })
 
   println("StoreQueue: size:" + StoreQueueSize)
@@ -91,7 +95,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   val dataModule = Module(new SQDataModule(
     numEntries = StoreQueueSize,
     numRead = StorePipelineWidth,
-    numWrite = StorePipelineWidth,
+    numWrite = StorePipelineWidth + 1,
     numForward = StorePipelineWidth
   ))
   dataModule.io := DontCare
@@ -252,8 +256,23 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     paddrModule.io.wen(i) := false.B
     vaddrModule.io.wen(i) := false.B
     dataModule.io.mask.wen(i) := false.B
+    dataModule.io.mask.wen(2) := false.B
+    dataModule.io.data.wen(2) := false.B
+
+
     val stWbIndex = io.storeIn(i).bits.uop.sqIdx.value
     when (io.storeIn(i).fire()) {
+      when (io.storeIn(i).bits.uop.cf.instr(6, 0) === "b0101011".U) {
+        dataModule.io.data.waddr(2) := stWbIndex
+        dataModule.io.data.wdata(2) := io.storeIn(i).bits.data
+        dataModule.io.data.wen(2) := true.B
+        dataModule.io.data.isMSD(2) := true.B
+
+        dataModule.io.mask.waddr(2) := stWbIndex
+        dataModule.io.mask.wdata(2) := "b11111111".U
+        dataModule.io.mask.wen(2) := true.B
+
+      }
       val addr_valid = !io.storeIn(i).bits.miss
       addrvalid(stWbIndex) := addr_valid //!io.storeIn(i).bits.mmio
       // pending(stWbIndex) := io.storeIn(i).bits.mmio
@@ -284,6 +303,13 @@ class StoreQueue(implicit p: Parameters) extends XSModule
       )
     }
 
+    when(
+      RegNext(io.storeIn(i).fire() && (io.storeIn(i).bits.uop.cf.instr === "b0101011".U) && !io.storeIn(i).bits.miss)
+      // && !RegNext(io.storeDataIn(i).bits.uop).robIdx.needFlush(io.brqRedirect)
+    ) {
+      datavalid(RegNext(stWbIndex)) := true.B
+    }
+
     // re-replinish mmio, for pma/pmp will get mmio one cycle later
     val storeInFireReg = RegNext(io.storeIn(i).fire() && !io.storeIn(i).bits.miss)
     val stWbIndexReg = RegNext(stWbIndex)
@@ -302,6 +328,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   for (i <- 0 until StorePipelineWidth) {
     dataModule.io.data.wen(i) := false.B
     val stWbIndex = io.storeDataIn(i).bits.uop.sqIdx.value
+    val isMSD = io.storeDataIn(i).bits.uop.cf.instr(6, 0) === "b0101011".U
     // sq data write takes 2 cycles:
     // sq data write s0
     when (io.storeDataIn(i).fire()) {
@@ -312,6 +339,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
         genWdata(io.storeDataIn(i).bits.data, io.storeDataIn(i).bits.uop.ctrl.fuOpType(1,0))
       )
       dataModule.io.data.wen(i) := true.B
+      dataModule.io.data.isMSD(i) := isMSD
 
       debug_data(dataModule.io.data.waddr(i)) := dataModule.io.data.wdata(i)
 
@@ -555,9 +583,20 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     dataBuffer.io.enq(i).bits.vaddr := vaddrModule.io.rdata(i)
     dataBuffer.io.enq(i).bits.data  := dataModule.io.rdata(i).data
     dataBuffer.io.enq(i).bits.mask  := dataModule.io.rdata(i).mask
+    dataBuffer.io.enq(i).bits.isMSD := dataModule.io.rdata(i).isMSD
     dataBuffer.io.enq(i).bits.wline := paddrModule.io.rlineflag(i)
     dataBuffer.io.enq(i).bits.sqPtr := rdataPtrExt(i)
   }
+
+  val isMSD_w = dontTouch(Wire(Vec(StorePipelineWidth, Bool())))
+
+  for (i <- 0 until StorePipelineWidth) {
+    isMSD_w(i) := dataBuffer.io.deq(i).bits.isMSD
+  }
+
+  io.fire := (isMSD_w(0) && dataBuffer.io.deq(0).valid && io.sbuffer(0).ready) ||
+             (isMSD_w(1) && dataBuffer.io.deq(1).valid && io.sbuffer(1).ready)
+
 
   // Send data stored in sbufferReqBitsReg to sbuffer
   for (i <- 0 until StorePipelineWidth) {
@@ -574,6 +613,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     io.sbuffer(i).bits.id    := DontCare
     io.sbuffer(i).bits.instrtype    := DontCare
 
+    io.isMSD <> isMSD_w
     // io.sbuffer(i).fire() is RegNexted, as sbuffer data write takes 2 cycles.
     // Before data write finish, sbuffer is unable to provide store to load
     // forward data. As an workaround, deqPtrExt and allocated flag update 

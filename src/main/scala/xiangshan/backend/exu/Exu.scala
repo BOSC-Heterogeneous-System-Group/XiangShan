@@ -127,6 +127,14 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule with
   @public val frm = if (config == FmacExeUnitCfg || config == FmiscExeUnitCfg) Some(IO(Input(UInt(3.W)))) else None
   @public val fmaMid = if (config == FmacExeUnitCfg) Some(IO(new FMAMidResultIO)) else None
   @public val ldio = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Flipped(DecoupledIO(new ExuOutput))))) else None
+  @public val mpuout_data = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(XLEN.W)))) else None
+  @public val mpuout_valid = if (config == MatuExeUnitCfg) Some(IO(Output(Bool()))) else None
+  @public val mpuout_addr = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(VAddrBits.W)))) else None
+  @public val mpuout_uop = if (config == MatuExeUnitCfg) Some(IO(Output(new MicroOp))) else None
+  @public val stin_data = if(config == StdExeUnitCfg) Some(IO(Input(UInt(XLEN.W)))) else None
+  @public val stin_valid = if(config == StdExeUnitCfg) Some(IO(Input(Bool()))) else None
+  @public val stin_uop = if(config == StdExeUnitCfg) Some(IO(Input(new MicroOp))) else None
+  @public val fire = if(config == MatuExeUnitCfg) Some(IO(Input(Bool()))) else None
   @public val dpio = if (config == MatuExeUnitCfg) Some(IO(Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp))))) else None
   @public val commitio_pc = if (config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(UInt(VAddrBits.W))))) else None
   @public val commitio_valid = if(config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(Bool())))) else None
