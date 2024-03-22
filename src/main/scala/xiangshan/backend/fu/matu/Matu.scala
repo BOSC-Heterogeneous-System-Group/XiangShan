@@ -67,15 +67,16 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     rf2D.io.ldIn.woffset_in := scoreboard.io.ldOut.offset_out
     rf2D.io.ldIn.valid_in := scoreboard.io.ldOut.wen
 
-    rf2D.io.stIO.roffset_in := scoreboard.io.stOut.roffset_out
-    rf2D.io.stIO.raddr_in := scoreboard.io.stOut.raddr_out
+    rf2D.io.stIO.roffset_in := scoreboard.io.stIO.roffset_out
+    rf2D.io.stIO.raddr_in := scoreboard.io.stIO.raddr_out
 
     io.mpuOut_data.get := rf2D.io.stIO.rdata_out
-    io.mpuOut_valid.get := scoreboard.io.stOut.store_flag
-    io.mpuOut_addr.get := scoreboard.io.stOut.saddr_out
+    io.mpuOut_valid.get := scoreboard.io.stIO.store_flag
+    io.mpuOut_addr.get := scoreboard.io.stIO.saddr_out
     io.mpuOut_uop.get <> uopReg
+    io.mpuOut_pc.get := scoreboard.io.stIO.pc_out
 
-    scoreboard.io.fire := io.fire.get
+    scoreboard.io.stIO.fire := io.fire.get
 
     val ex_valid_w = dontTouch(Wire(Bool()))
     val rs1_w = dontTouch(Wire(UInt(3.W)))

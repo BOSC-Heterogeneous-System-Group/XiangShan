@@ -66,6 +66,7 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val mpuOut_valid = if (numMatu > 0) Some(Output(Bool())) else None
     val mpuOut_uop = if (numMatu > 0) Some(Output(new MicroOp)) else None
     val mpuOut_addr = if (numMatu > 0) Some(Output(UInt(VAddrBits.W))) else None
+    val mpuOut_pc = if (numMatu > 0) Some(Output(UInt(VAddrBits.W))) else None
     // to std
     val stIn_data = if (numMatu > 0) Some(Input(UInt(XLEN.W))) else None
     val stIn_valid = if (numMatu > 0) Some(Input(Bool())) else None
@@ -153,6 +154,13 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val filteredPort = exeUnits.map(_.mpuout_addr).filter(_.isDefined).map(_.get)
     if (filteredPort.nonEmpty) {
       io.mpuOut_addr.get := filteredPort.head
+    }
+  }
+
+  if (io.mpuOut_pc.isDefined) {
+    val filteredPort = exeUnits.map(_.mpuout_pc).filter(_.isDefined).map(_.get)
+    if (filteredPort.nonEmpty) {
+      io.mpuOut_pc.get := filteredPort.head
     }
   }
 

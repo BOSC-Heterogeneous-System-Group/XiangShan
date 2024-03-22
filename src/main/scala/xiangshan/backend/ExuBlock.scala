@@ -85,6 +85,7 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val stOut = ValidIO(UInt(XLEN.W))
     val saddr = Output(UInt(VAddrBits.W))
     val suop = Output(new MicroOp)
+    val spc = Output(UInt(VAddrBits.W))
     // to std
     val stIn = Flipped(ValidIO(UInt(XLEN.W)))
     // from rob
@@ -158,6 +159,10 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
 
   if (fuBlock.io.mpuOut_uop.isDefined) {
     io.suop <> fuBlock.io.mpuOut_uop.get
+  }
+
+  if (fuBlock.io.mpuOut_pc.isDefined) {
+    io.spc := fuBlock.io.mpuOut_pc.get
   }
 
   if (fuBlock.io.fire.isDefined) {
