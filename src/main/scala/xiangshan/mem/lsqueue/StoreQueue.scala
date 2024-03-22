@@ -95,7 +95,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   val dataModule = Module(new SQDataModule(
     numEntries = StoreQueueSize,
     numRead = StorePipelineWidth,
-    numWrite = StorePipelineWidth + 1,
+    numWrite = 2 * StorePipelineWidth,
     numForward = StorePipelineWidth
   ))
   dataModule.io := DontCare
@@ -256,21 +256,21 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     paddrModule.io.wen(i) := false.B
     vaddrModule.io.wen(i) := false.B
     dataModule.io.mask.wen(i) := false.B
-    dataModule.io.mask.wen(2) := false.B
-    dataModule.io.data.wen(2) := false.B
+    dataModule.io.mask.wen(i + StorePipelineWidth) := false.B
+    dataModule.io.data.wen(i + StorePipelineWidth) := false.B
 
 
     val stWbIndex = io.storeIn(i).bits.uop.sqIdx.value
     when (io.storeIn(i).fire()) {
       when (io.storeIn(i).bits.uop.cf.instr(6, 0) === "b0101011".U) {
-        dataModule.io.data.waddr(2) := stWbIndex
-        dataModule.io.data.wdata(2) := io.storeIn(i).bits.data
-        dataModule.io.data.wen(2) := true.B
-        dataModule.io.data.isMSD(2) := true.B
+        dataModule.io.data.waddr(i + StorePipelineWidth) := stWbIndex
+        dataModule.io.data.wdata(i + StorePipelineWidth) := io.storeIn(i).bits.data
+        dataModule.io.data.wen(i + StorePipelineWidth) := true.B
+        dataModule.io.data.isMSD(i + StorePipelineWidth) := true.B
 
-        dataModule.io.mask.waddr(2) := stWbIndex
-        dataModule.io.mask.wdata(2) := "b11111111".U
-        dataModule.io.mask.wen(2) := true.B
+        dataModule.io.mask.waddr(i + StorePipelineWidth) := stWbIndex
+        dataModule.io.mask.wdata(i + StorePipelineWidth) := "b11111111".U
+        dataModule.io.mask.wen(i + StorePipelineWidth) := true.B
 
       }
       val addr_valid = !io.storeIn(i).bits.miss

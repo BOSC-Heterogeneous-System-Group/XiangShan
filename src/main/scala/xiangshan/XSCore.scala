@@ -277,6 +277,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   memBlock.io.mpuData <> exuBlocks.head.io.stOut.bits
   memBlock.io.mpuAddr <> exuBlocks.head.io.saddr
   memBlock.io.mpuUop <> exuBlocks.head.io.suop
+  memBlock.io.mpuPc <> exuBlocks.head.io.spc
   exuBlocks.head.io.fire := memBlock.io.fire
 
 

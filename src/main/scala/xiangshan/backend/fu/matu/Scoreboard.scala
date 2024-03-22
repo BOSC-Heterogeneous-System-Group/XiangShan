@@ -34,11 +34,13 @@ class load_out(implicit p: Parameters) extends XSBundle {
   val offset_out = Output(UInt(2.W))
 }
 
-class store_out(implicit p: Parameters) extends XSBundle {
+class store_io(implicit p: Parameters) extends XSBundle {
+  val fire = Input(Bool())
   val raddr_out = Output(UInt(3.W))
   val roffset_out = Output(UInt(2.W))
   val store_flag = Output(Bool())
   val saddr_out = Output(UInt(VAddrBits.W))
+  val pc_out = Output(UInt(VAddrBits.W))
 }
 
 class fu_io(implicit p: Parameters) extends XSBundle {
@@ -66,12 +68,11 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     val ldIn = new load_in()
     val rsIn = new rs_in()
     val ldOut = new load_out()
-    val stOut = new store_out()
+    val stIO = new store_io()
     val dpIn = new dispatch_in()
     val fuIO = new fu_io()
     val commitsIO = new commits_scb_io()
     val wbIn= new writeback_in()
-    val fire = Input(Bool())
   })
 
   val s_idle :: s_wait :: s_commit :: s_retire :: s_unready :: s_ready :: Nil = Enum(6) // ins state
@@ -272,7 +273,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                        OpType_array(i) === LSUOpType.mld
     commitVec(1)(i) := state_array(i) === s_commit && io.wbIn.wen(1) && io.wbIn.waddr(1) === rd_array(i) && rs1_ready_array(i) === s_ready && rs2_ready_array(i) === s_ready &&
                       (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest)
-    commitVec(2)(i) := state_array(i) === s_commit && OpType_array(i) === LSUOpType.sd && io.fire
+    commitVec(2)(i) := state_array(i) === s_commit && OpType_array(i) === LSUOpType.sd && io.stIO.fire
   }
 
   /*  Seq.tabulate(3)(i =>
@@ -374,8 +375,11 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     rs_ready_vec(i) := rs1_ready_array(i) === s_ready && rs2_ready_array(i) === s_ready && rd_ready_array(i) === s_ready &&
                       (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) &&
                       (state_array(i) === s_wait || state_array(i) === s_commit)
-
-    st_ready_vec(i) := rs2_ready_array(i) === s_ready && OpType_array(i) === LSUOpType.sd && (state_array(i) === s_wait || state_array(i) === s_commit)
+    val stMatchVec = dontTouch(Wire(Vec(i, Bool())))
+    for (j <- 0 until i) {
+      stMatchVec(j) := OpType_array(j) === LSUOpType.sd && state_array(j) === s_wait
+    }
+    st_ready_vec(i) := rs2_ready_array(i) === s_ready && OpType_array(i) === LSUOpType.sd && (state_array(i) === s_wait || state_array(i) === s_commit) && !stMatchVec.asUInt.orR
   }
 
   io.fuIO.OpType_out := OpType_array(PriorityEncoder(rs_ready_vec.asUInt))
@@ -386,10 +390,11 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   io.fuIO.rs2_out := rs2_array(PriorityEncoder(rs_ready_vec.asUInt))
   io.fuIO.rd_out := rd_array(PriorityEncoder(rs_ready_vec.asUInt))
 
-  io.stOut.raddr_out := rs2_array(PriorityEncoder(st_ready_vec.asUInt))
-  io.stOut.roffset_out := rs2_offset_array(PriorityEncoder(st_ready_vec.asUInt))
-  io.stOut.saddr_out := saddr_array(PriorityEncoder(st_ready_vec.asUInt))
-  io.stOut.store_flag := st_ready_vec.asUInt.orR
+  io.stIO.raddr_out := rs2_array(PriorityEncoder(st_ready_vec.asUInt))
+  io.stIO.roffset_out := rs2_offset_array(PriorityEncoder(st_ready_vec.asUInt))
+  io.stIO.saddr_out := saddr_array(PriorityEncoder(st_ready_vec.asUInt))
+  io.stIO.store_flag := st_ready_vec.asUInt.orR
+  io.stIO.pc_out := pc_array(PriorityEncoder(st_ready_vec.asUInt))
 
   /** load instr WAW
    * Handle write after write hazard
