@@ -1,18 +1,18 @@
 /***************************************************************************************
-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-* Copyright (c) 2020-2021 Peng Cheng Laboratory
-*
-* XiangShan is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
+ * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+ * Copyright (c) 2020-2021 Peng Cheng Laboratory
+ *
+ * XiangShan is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ ***************************************************************************************/
 
 package xiangshan.backend.fu
 
@@ -170,7 +170,7 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
   }
 
   class Interrupt extends Bundle {
-//  val d = Output(Bool())    // Debug
+    //  val d = Output(Bool())    // Debug
     val e = new Priv
     val t = new Priv
     val s = new Priv
@@ -304,20 +304,20 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
 
   val mstatusWMask = (~ZeroExt((
     GenMask(XLEN - 2, 36) | // WPRI
-    GenMask(35, 32)       | // SXL and UXL cannot be changed
-    GenMask(31, 23)       | // WPRI
-    GenMask(16, 15)       | // XS is read-only
-    GenMask(10, 9)        | // WPRI
-    GenMask(6)            | // WPRI
-    GenMask(2)              // WPRI
-  ), 64)).asUInt
+      GenMask(35, 32)       | // SXL and UXL cannot be changed
+      GenMask(31, 23)       | // WPRI
+      GenMask(16, 15)       | // XS is read-only
+      GenMask(10, 9)        | // WPRI
+      GenMask(6)            | // WPRI
+      GenMask(2)              // WPRI
+    ), 64)).asUInt
   val mstatusMask = (~ZeroExt((
     GenMask(XLEN - 2, 36) | // WPRI
-    GenMask(31, 23)       | // WPRI
-    GenMask(10, 9)        | // WPRI
-    GenMask(6)            | // WPRI
-    GenMask(2)              // WPRI
-  ), 64)).asUInt
+      GenMask(31, 23)       | // WPRI
+      GenMask(10, 9)        | // WPRI
+      GenMask(6)            | // WPRI
+      GenMask(2)              // WPRI
+    ), 64)).asUInt
 
   val medeleg = RegInit(UInt(XLEN.W), 0.U)
   val mideleg = RegInit(UInt(XLEN.W), 0.U)
@@ -427,7 +427,7 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
   // smblockctl: memory block configurations
   // bits 0-3: store buffer flush threshold (default: 8 entries)
   val smblockctl_init_val =
-    (0xf & StoreBufferThreshold) |
+  (0xf & StoreBufferThreshold) |
     (EnableLdVioCheckAfterReset.toInt << 4) |
     (EnableSoftPrefetchAfterReset.toInt << 5) |
     (EnableCacheErrorAfterReset.toInt << 6) |
@@ -514,9 +514,9 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
   val perfEventscounten = RegInit(0.U.asTypeOf(Vec(nrPerfCnts, Bool())))
   val perfCnts   = List.fill(nrPerfCnts)(RegInit(0.U(XLEN.W)))
   val perfEvents = List.fill(8)(RegInit("h0000000000".U(XLEN.W))) ++
-                   List.fill(8)(RegInit("h4010040100".U(XLEN.W))) ++
-                   List.fill(8)(RegInit("h8020080200".U(XLEN.W))) ++
-                   List.fill(5)(RegInit("hc0300c0300".U(XLEN.W)))
+    List.fill(8)(RegInit("h4010040100".U(XLEN.W))) ++
+    List.fill(8)(RegInit("h8020080200".U(XLEN.W))) ++
+    List.fill(5)(RegInit("hc0300c0300".U(XLEN.W)))
   for (i <-0 until nrPerfCnts) {
     perfEventscounten(i) := (perfEvents(i)(63,60) & priviledgeModeOH).orR
   }
@@ -541,9 +541,9 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
   mcycle := mcycle + 1.U
   val minstret = RegInit(0.U(XLEN.W))
   val perf_events = csrio.perf.perfEventsFrontend ++
-                    csrio.perf.perfEventsCtrl ++
-                    csrio.perf.perfEventsLsu ++
-                    hpm_hc.getPerf
+    csrio.perf.perfEventsCtrl ++
+    csrio.perf.perfEventsLsu ++
+    hpm_hc.getPerf
   minstret := minstret + RegNext(csrio.perf.retiredInstr)
   for(i <- 0 until 29){
     perfCnts(i) := Mux(mcountinhibit(i+3) | !perfEventscounten(i), perfCnts(i), perfCnts(i) + perf_events(i).value)
@@ -634,12 +634,12 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
 
   val perfCntMapping = (0 until 29).map(i => {Map(
     MaskedRegMap(addr = Mhpmevent3 +i,
-                 reg  = perfEvents(i),
-                 wmask = "hf87fff3fcff3fcff".U(XLEN.W)),
+      reg  = perfEvents(i),
+      wmask = "hf87fff3fcff3fcff".U(XLEN.W)),
     MaskedRegMap(addr = Mhpmcounter3 +i,
-                 reg  = perfCnts(i)),
+      reg  = perfCnts(i)),
     MaskedRegMap(addr = Hpmcounter3 + i,
-                 reg  = perfCnts(i))
+      reg  = perfCnts(i))
   )}).fold(Map())((a,b) => a ++ b)
   // TODO: mechanism should be implemented later
   // val MhpmcounterStart = Mhpmcounter3
@@ -660,11 +660,11 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
   }}
 
   val mapping = basicPrivMapping ++
-                perfCntMapping ++
-                pmpMapping ++
-                pmaMapping ++
-                (if (HasFPU) fcsrMapping else Nil) ++
-                (if (HasCustomCSRCacheOp) cacheopMapping else Nil)
+    perfCntMapping ++
+    pmpMapping ++
+    pmaMapping ++
+    (if (HasFPU) fcsrMapping else Nil) ++
+    (if (HasCustomCSRCacheOp) cacheopMapping else Nil)
 
   println("XiangShan CSR Lists")
 
@@ -890,7 +890,7 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
   // Ebreak block instructions backwards, so it's ok to not keep extra info to distinguish between breakpoint
   // exception and enter-debug-mode exception.
   val ebreakEnterDebugMode =
-    (priviledgeMode === ModeM && dcsrData.ebreakm) ||
+  (priviledgeMode === ModeM && dcsrData.ebreakm) ||
     (priviledgeMode === ModeS && dcsrData.ebreaks) ||
     (priviledgeMode === ModeU && dcsrData.ebreaku)
 
@@ -911,8 +911,8 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
   XSDebug(io.in.valid, s"Debug Mode: an Ebreak is executed, ebreak cause enter-debug-mode exception ? ${raiseDebugException}\n")
 
   /**
-    * Exception and Intr
-    */
+   * Exception and Intr
+   */
   val ideleg =  (mideleg & mip.asUInt)
   def priviledgedEnableDetect(x: Bool): Bool = Mux(x, ((priviledgeMode === ModeS) && mstatusStruct.ie.s) || (priviledgeMode < ModeS),
     ((priviledgeMode === ModeM) && mstatusStruct.ie.m) || (priviledgeMode < ModeM))
@@ -1022,14 +1022,14 @@ class CSR(implicit p: Parameters) extends FunctionUnit(64, JumpCSRExeUnitCfg) wi
     hasStoreAddrMisalign
   )).asUInt.orR
   when (RegNext(RegNext(updateTval))) {
-      val tval = Mux(
-        RegNext(RegNext(hasInstrPageFault || hasInstrAccessFault)),
-        RegNext(RegNext(Mux(
-          csrio.exception.bits.uop.cf.crossPageIPFFix,
-          SignExt(csrio.exception.bits.uop.cf.pc + 2.U, XLEN),
-          iexceptionPC
-        ))),
-        memExceptionAddr
+    val tval = Mux(
+      RegNext(RegNext(hasInstrPageFault || hasInstrAccessFault)),
+      RegNext(RegNext(Mux(
+        csrio.exception.bits.uop.cf.crossPageIPFFix,
+        SignExt(csrio.exception.bits.uop.cf.pc + 2.U, XLEN),
+        iexceptionPC
+      ))),
+      memExceptionAddr
     )
     when (RegNext(priviledgeMode === ModeM)) {
       mtval := tval
@@ -1226,14 +1226,14 @@ class PFEvent(implicit p: Parameters) extends XSModule with HasCSRConst  {
   val w = io.distribute_csr.w
 
   val perfEvents = List.fill(8)(RegInit("h0000000000".U(XLEN.W))) ++
-                   List.fill(8)(RegInit("h4010040100".U(XLEN.W))) ++
-                   List.fill(8)(RegInit("h8020080200".U(XLEN.W))) ++
-                   List.fill(5)(RegInit("hc0300c0300".U(XLEN.W)))
+    List.fill(8)(RegInit("h4010040100".U(XLEN.W))) ++
+    List.fill(8)(RegInit("h8020080200".U(XLEN.W))) ++
+    List.fill(5)(RegInit("hc0300c0300".U(XLEN.W)))
 
   val perfEventMapping = (0 until 29).map(i => {Map(
     MaskedRegMap(addr = Mhpmevent3 +i,
-                 reg  = perfEvents(i),
-                 wmask = "hf87fff3fcff3fcff".U(XLEN.W))
+      reg  = perfEvents(i),
+      wmask = "hf87fff3fcff3fcff".U(XLEN.W))
   )}).fold(Map())((a,b) => a ++ b)
 
   val rdata = Wire(UInt(XLEN.W))

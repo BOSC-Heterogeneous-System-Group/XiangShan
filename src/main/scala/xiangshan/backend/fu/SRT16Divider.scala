@@ -1,18 +1,18 @@
 /***************************************************************************************
-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-* Copyright (c) 2020-2021 Peng Cheng Laboratory
-*
-* XiangShan is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
+ * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+ * Copyright (c) 2020-2021 Peng Cheng Laboratory
+ *
+ * XiangShan is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ ***************************************************************************************/
 
 // This file contains components originally written by Yifei He, see
 // https://github.com/OpenXiangShan/XS-Verilog-Library/tree/main/int_div_radix_4_v1
@@ -53,8 +53,8 @@ class SRT16DividerDataModule(len: Int) extends Module {
   val state = RegInit((1 << s_idle.litValue.toInt).U(7.W))
 
   // reused wires
-//  val aNormAbs = Wire(UInt((len + 1).W)) // Inputs of xNormAbs regs below
-//  val dNormAbs = Wire(UInt((len + 1).W))
+  //  val aNormAbs = Wire(UInt((len + 1).W)) // Inputs of xNormAbs regs below
+  //  val dNormAbs = Wire(UInt((len + 1).W))
   val quotIter = Wire(UInt(len.W))
   val quotM1Iter = Wire(UInt(len.W))
   val aLZC = Wire(UInt((lzc_width + 1).W))
@@ -70,8 +70,8 @@ class SRT16DividerDataModule(len: Int) extends Module {
   val special = Wire(Bool())
 
   // reused regs
-//  val aNormAbsReg = RegEnable(aNormAbs, newReq | state(s_pre_0) | state(s_post_0)) // reg for normalized a & d and rem & rem+d
-//  val dNormAbsReg = RegEnable(dNormAbs, newReq | state(s_pre_0) | state(s_post_0))
+  //  val aNormAbsReg = RegEnable(aNormAbs, newReq | state(s_pre_0) | state(s_post_0)) // reg for normalized a & d and rem & rem+d
+  //  val dNormAbsReg = RegEnable(dNormAbs, newReq | state(s_pre_0) | state(s_post_0))
   val quotIterReg = RegEnable(quotIter, state(s_pre_1) | state(s_iter) | state(s_post_0))
   val quotM1IterReg = RegEnable(quotM1Iter, state(s_pre_1) | state(s_iter) | state(s_post_0))
   val specialReg = RegEnable(special, state(s_pre_1))
@@ -116,16 +116,16 @@ class SRT16DividerDataModule(len: Int) extends Module {
   val aNormReg = RegEnable(aNorm, state(s_pre_0))
   val dNormReg = RegEnable(dNorm, state(s_pre_0))
 
-//  aNormAbs := Mux1H(Seq(
-//    state(s_idle) -> Cat(0.U(1.W), aAbs), // 65, 0
-//    state(s_pre_0) -> Cat(0.U(1.W), aNorm), // 65, 0
-//    state(s_post_0) -> rNext(len + 3, 3) // remainder 65, 64. highest is sign bit
-//  ))
-//  dNormAbs := Mux1H(Seq(
-//    state(s_idle) -> Cat(0.U(1.W), dAbs),
-//    state(s_pre_0) -> Cat(0.U(1.W), dNorm),
-//    state(s_post_0) -> rNextPd(len + 3, 3)
-//    ))
+  //  aNormAbs := Mux1H(Seq(
+  //    state(s_idle) -> Cat(0.U(1.W), aAbs), // 65, 0
+  //    state(s_pre_0) -> Cat(0.U(1.W), aNorm), // 65, 0
+  //    state(s_post_0) -> rNext(len + 3, 3) // remainder 65, 64. highest is sign bit
+  //  ))
+  //  dNormAbs := Mux1H(Seq(
+  //    state(s_idle) -> Cat(0.U(1.W), dAbs),
+  //    state(s_pre_0) -> Cat(0.U(1.W), dNorm),
+  //    state(s_post_0) -> rNextPd(len + 3, 3)
+  //    ))
 
   // Second cycle, state is pre_0
   // calculate lzc and move div* and lzc diff check if no_iter_needed
@@ -137,7 +137,7 @@ class SRT16DividerDataModule(len: Int) extends Module {
 
   val lzcWireDiff = Cat(0.U(1.W), dLZC(lzc_width - 1, 0)) - Cat(0.U(1.W), aLZC(lzc_width - 1, 0)) // 7, 0
   val lzcRegDiff = Cat(0.U(1.W), dLZCReg(lzc_width - 1, 0)) - Cat(0.U(1.W), aLZCReg(lzc_width - 1, 0))
-//  val lzcDiff = Mux(state(s_pre_0), lzcWireDiff, lzcRegDiff)
+  //  val lzcDiff = Mux(state(s_pre_0), lzcWireDiff, lzcRegDiff)
 
   // special case:
   // divisor is 1 or -1; dividend has less bits than divisor; divisor is zero
@@ -150,9 +150,9 @@ class SRT16DividerDataModule(len: Int) extends Module {
   val aRegNeg = RegEnable(-aReg, state(s_pre_0))
 
   val quotSpecial = Mux(dIsZero, VecInit(Seq.fill(len)(true.B)).asUInt,
-                            Mux(aTooSmall, 0.U,
-                              Mux(dSignReg, aRegNeg, aReg) //  signed 2^(len-1)
-                            ))
+    Mux(aTooSmall, 0.U,
+      Mux(dSignReg, aRegNeg, aReg) //  signed 2^(len-1)
+    ))
   val remSpecial = Mux(dIsZero || aTooSmall, aReg, 0.U)
   val quotSpecialReg = RegEnable(quotSpecial, state(s_pre_1))
   val remSpecialReg = RegEnable(remSpecial, state(s_pre_1))
@@ -241,15 +241,15 @@ class SRT16DividerDataModule(len: Int) extends Module {
   // Give values to the regs and wires above...
   val dForLookup = dPos(len-2, len-4)
   mNeg := VecInit(Cat(SignExt(MuxLookup(dNormReg(len-2, len-4), "b00000000".U(7.W), mLookUpTable2.minus_m(0)), 11), 0.U(1.W)), // (2, 5) -> (6, 6)
-                  Cat(SignExt(MuxLookup(dNormReg(len-2, len-4), "b00000000".U(7.W), mLookUpTable2.minus_m(1)), 10) ,0.U(2.W)), // (3, 4) -> (6, 6)
-                  Cat(SignExt(MuxLookup(dNormReg(len-2, len-4), "b00000000".U(7.W), mLookUpTable2.minus_m(2)), 10) ,0.U(2.W)),
-                  Cat(SignExt(MuxLookup(dNormReg(len-2, len-4), "b00000000".U(7.W), mLookUpTable2.minus_m(3)), 11) ,0.U(1.W))
+    Cat(SignExt(MuxLookup(dNormReg(len-2, len-4), "b00000000".U(7.W), mLookUpTable2.minus_m(1)), 10) ,0.U(2.W)), // (3, 4) -> (6, 6)
+    Cat(SignExt(MuxLookup(dNormReg(len-2, len-4), "b00000000".U(7.W), mLookUpTable2.minus_m(2)), 10) ,0.U(2.W)),
+    Cat(SignExt(MuxLookup(dNormReg(len-2, len-4), "b00000000".U(7.W), mLookUpTable2.minus_m(3)), 11) ,0.U(1.W))
   )
   udNeg := VecInit( Cat(SignExt(dPos, 66), 0.U(2.W)),
-                    Cat(SignExt(dPos, 67), 0.U(1.W)),
-                    0.U,
-                    Cat(SignExt(dNeg, 67), 0.U(1.W)),
-                    Cat(SignExt(dNeg, 66), 0.U(2.W))
+    Cat(SignExt(dPos, 67), 0.U(1.W)),
+    0.U,
+    Cat(SignExt(dNeg, 67), 0.U(1.W)),
+    Cat(SignExt(dNeg, 66), 0.U(2.W))
   )
 
   rudNeg := VecInit(Seq.tabulate(5){i => udNeg(i)(itn_len-2, itn_len-11)})
@@ -264,7 +264,7 @@ class SRT16DividerDataModule(len: Int) extends Module {
   r2wc := rCarryReg(itn_len-1, itn_len-10)
 
   val udNegReg = RegEnable(udNeg, state(s_pre_1))
-//  val rudNegReg = RegEnable(rudNeg, state(s_pre_1))
+  //  val rudNegReg = RegEnable(rudNeg, state(s_pre_1))
   val rudPmNegReg = RegEnable(rudPmNeg, state(s_pre_1))
   val r2udPmNegReg = RegEnable(r2udPmNeg, state(s_pre_1))
 
@@ -284,8 +284,8 @@ class SRT16DividerDataModule(len: Int) extends Module {
     csa.io.in(1) := r2wc
     csa.io.in(2) := Mux1H(qPrevReg, rudPmNegReg.toSeq)(i) // rudPmNeg(OHToUInt(qPrevReg))(i)
 
-      (csa.io.out(0) + (csa.io.out(1)(8, 0) << 1))(9)
-    }})
+    (csa.io.out(0) + (csa.io.out(1)(8, 0) << 1))(9)
+  }})
   qNext := DetectSign(signs.asUInt, s"sel_q")
   val csaWide1 = Module(new CSA3_2(itn_len)).suggestName("csa_sel_wide_1")
   val csaWide2 = Module(new CSA3_2(itn_len)).suggestName("csa_sel_wide_2")
@@ -301,19 +301,19 @@ class SRT16DividerDataModule(len: Int) extends Module {
   // r3wcIter := (csaWide1.io.out(0)(itn_len-3, itn_len-16) + (csaWide1.io.out(1) << 1)(itn_len-3, itn_len-16))(13,1)
   // Speculative block
   qSpec := VecInit(Seq.tabulate(5){ q_spec => {
-      val csa1 = Module(new CSA3_2(13)).suggestName(s"csa_spec_${q_spec}")
-      csa1.io.in(0) := r3ws
-      csa1.io.in(1) := r3wc
-      csa1.io.in(2) := SignExt(udNegReg(q_spec)(itn_len-2, itn_len-11), 13) // (4, 6) -> (7, 6)
-      val signs2 = VecInit(Seq.tabulate(4){ i => {
-        val csa2 = Module(new CSA3_2(13)).suggestName(s"csa_spec_${q_spec}_${i}")
-        csa2.io.in(0) := csa1.io.out(0)
-        csa2.io.in(1) := (csa1.io.out(1) << 1)(12, 0)
-        csa2.io.in(2) := Mux1H(qPrevReg, r2udPmNegReg.toSeq)(i) // r2udPmNeg(OHToUInt(qPrevReg))(i)
-        (csa2.io.out(0) + (csa2.io.out(1)(11, 0) << 1))(12)
-      }})
-      val qVec2 = DetectSign(signs2.asUInt, s"spec_q_${q_spec}")
-      qVec2
+    val csa1 = Module(new CSA3_2(13)).suggestName(s"csa_spec_${q_spec}")
+    csa1.io.in(0) := r3ws
+    csa1.io.in(1) := r3wc
+    csa1.io.in(2) := SignExt(udNegReg(q_spec)(itn_len-2, itn_len-11), 13) // (4, 6) -> (7, 6)
+    val signs2 = VecInit(Seq.tabulate(4){ i => {
+      val csa2 = Module(new CSA3_2(13)).suggestName(s"csa_spec_${q_spec}_${i}")
+      csa2.io.in(0) := csa1.io.out(0)
+      csa2.io.in(1) := (csa1.io.out(1) << 1)(12, 0)
+      csa2.io.in(2) := Mux1H(qPrevReg, r2udPmNegReg.toSeq)(i) // r2udPmNeg(OHToUInt(qPrevReg))(i)
+      (csa2.io.out(0) + (csa2.io.out(1)(11, 0) << 1))(12)
+    }})
+    val qVec2 = DetectSign(signs2.asUInt, s"spec_q_${q_spec}")
+    qVec2
   }})
   // qNext2 := qSpec(OHToUInt(qNext)) // TODO: Use Mux1H!!
 
@@ -326,18 +326,18 @@ class SRT16DividerDataModule(len: Int) extends Module {
   val quotM1IterNext = Wire(UInt(64.W))
   def OTFC(q: UInt, quot: UInt, quotM1: UInt): (UInt, UInt) = {
     val quotNext = Mux1H(Seq(
-    q(quot_pos_2) -> (quot << 2 | "b10".U),
-    q(quot_pos_1) -> (quot << 2 | "b01".U),
-    q(quot_0)     -> (quot << 2 | "b00".U),
-    q(quot_neg_1) -> (quotM1 << 2 | "b11".U),
-    q(quot_neg_2) -> (quotM1 << 2 | "b10".U)
+      q(quot_pos_2) -> (quot << 2 | "b10".U),
+      q(quot_pos_1) -> (quot << 2 | "b01".U),
+      q(quot_0)     -> (quot << 2 | "b00".U),
+      q(quot_neg_1) -> (quotM1 << 2 | "b11".U),
+      q(quot_neg_2) -> (quotM1 << 2 | "b10".U)
     ))
     val quotM1Next = Mux1H(Seq(
-    q(quot_pos_2) -> (quot << 2 | "b01".U),
-    q(quot_pos_1) -> (quot << 2 | "b00".U),
-    q(quot_0)     -> (quotM1 << 2 | "b11".U),
-    q(quot_neg_1) -> (quotM1 << 2 | "b10".U),
-    q(quot_neg_2) -> (quotM1 << 2 | "b01".U)
+      q(quot_pos_2) -> (quot << 2 | "b01".U),
+      q(quot_pos_1) -> (quot << 2 | "b00".U),
+      q(quot_0)     -> (quotM1 << 2 | "b11".U),
+      q(quot_neg_1) -> (quotM1 << 2 | "b10".U),
+      q(quot_neg_2) -> (quotM1 << 2 | "b01".U)
     ))
     (quotNext(len-1, 0), quotM1Next(len-1, 0))
   }
@@ -353,11 +353,11 @@ class SRT16DividerDataModule(len: Int) extends Module {
   //                         Mux(quotSignReg, dInverter, quotM1IterReg)))
 
   quotIter := Mux(state(s_iter), quotIterNext,
-                    Mux(state(s_pre_1), 0.U(len.W),
-                      Mux(quotSignReg, aInverter, quotIterReg)))
+    Mux(state(s_pre_1), 0.U(len.W),
+      Mux(quotSignReg, aInverter, quotIterReg)))
   quotM1Iter := Mux(state(s_iter), quotM1IterNext,
-                      Mux(state(s_pre_1), 0.U(len.W),
-                        Mux(quotSignReg, dInverter, quotM1IterReg)))
+    Mux(state(s_pre_1), 0.U(len.W),
+      Mux(quotSignReg, dInverter, quotM1IterReg)))
   // finally, to the recovery stages!
 
   when(rSignReg) {

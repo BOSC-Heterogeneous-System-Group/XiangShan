@@ -262,7 +262,7 @@ class StoreQueue(implicit p: Parameters) extends XSModule
 
     val stWbIndex = io.storeIn(i).bits.uop.sqIdx.value
     when (io.storeIn(i).fire()) {
-      when (io.storeIn(i).bits.uop.cf.instr(6, 0) === "b0101011".U) {
+      when (io.storeIn(i).bits.uop.cf.instr(6, 0) === "b0101011".U && !io.storeIn(i).bits.miss) {
         dataModule.io.data.waddr(i + StorePipelineWidth) := stWbIndex
         dataModule.io.data.wdata(i + StorePipelineWidth) := io.storeIn(i).bits.data
         dataModule.io.data.wen(i + StorePipelineWidth) := true.B
