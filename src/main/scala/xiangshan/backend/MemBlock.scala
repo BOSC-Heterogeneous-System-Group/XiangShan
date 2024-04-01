@@ -33,8 +33,10 @@ import xiangshan.cache._
 import xiangshan.cache.mmu.{BTlbPtwIO, TLB, TlbReplace}
 import xiangshan.mem._
 import xiangshan.mem.prefetch.{BasePrefecher, SMSParams, SMSPrefetcher}
+import xiangshan.backend.fu.matu._
+import xiangshan.backend.fu._
 
-class Std(implicit p: Parameters) extends FunctionUnit {
+class Std(implicit p: Parameters) extends FunctionUnit(64, StdExeUnitCfg) {
   io.in.ready := true.B
   io.out.valid := io.in.valid
   io.out.bits.uop := io.in.bits.uop
@@ -78,10 +80,17 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
     val loadPc = Vec(exuParameters.LduCnt, Input(UInt(VAddrBits.W)))
     val rsfeedback = Vec(exuParameters.LsExuCnt, new MemRSFeedbackIO)
     val stIssuePtr = Output(new SqPtr())
+    val mpuValid = Input(Bool())
+    val mpuData = Input(UInt(XLEN.W))
+    val mpuAddr = Input(UInt(VAddrBits.W))
+    val mpuUop = Input(new MicroOp)
+    val mpuPc = Input(UInt(VAddrBits.W))
+    val fire = Output(Bool())
     // out
     val writeback = Vec(exuParameters.LsExuCnt + exuParameters.StuCnt, DecoupledIO(new ExuOutput))
     val s3_delayed_load_error = Vec(exuParameters.LduCnt, Output(Bool()))
     val otherFastWakeup = Vec(exuParameters.LduCnt + 2 * exuParameters.StuCnt, ValidIO(new MicroOp))
+    val ldout_dup = Vec(exuParameters.LduCnt, DecoupledIO(new ExuOutput))
     // misc
     val stIn = Vec(exuParameters.StuCnt, ValidIO(new ExuInput))
     val memoryViolation = ValidIO(new Redirect)
@@ -153,7 +162,35 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
   loadUnits.zipWithIndex.map(x => x._1.suggestName("LoadUnit_"+x._2))
   storeUnits.zipWithIndex.map(x => x._1.suggestName("StoreUnit_"+x._2))
 
+  stdExeUnits(0).stin_data.get := io.mpuData
+  stdExeUnits(1).stin_data.get := io.mpuData
+  stdExeUnits(0).stin_valid.get := io.mpuValid
+  stdExeUnits(1).stin_valid.get := false.B
+  stdExeUnits(0).stin_uop.get <> io.mpuUop
+  stdExeUnits(1).stin_uop.get <> io.mpuUop
+
+  storeUnits(0).io.mpuValid := io.mpuValid
+  storeUnits(1).io.mpuValid := io.mpuValid
+  storeUnits(0).io.mpuData := io.mpuData
+  storeUnits(1).io.mpuData := io.mpuData
+  storeUnits(0).io.mpuUop <> io.mpuUop
+  storeUnits(1).io.mpuUop <> io.mpuUop
+  storeUnits(0).io.mpuAddr := io.mpuAddr
+  storeUnits(1).io.mpuAddr := io.mpuAddr
+  storeUnits(0).io.mpuPc := io.mpuPc
+  storeUnits(1).io.mpuPc := io.mpuPc
+
   val atomicsUnit = Module(new AtomicsUnit)
+
+  val ldout_reg = RegInit(0.U(64.W))
+  ldout_reg := loadUnits(0).io.ldout.bits.data
+  val ldout_w = dontTouch(Wire(Vec(exuParameters.LduCnt, DecoupledIO(new ExuOutput))))
+  ldout_w(0) <> loadUnits(0).io.ldout
+  ldout_w(1) <> loadUnits(1).io.ldout
+  io.ldout_dup(0) <> ldout_w(0)
+  io.ldout_dup(1) <> ldout_w(1)
+  loadUnits(0).io.ldout_dup.ready := io.ldout_dup(0).ready
+  loadUnits(1).io.ldout_dup.ready := io.ldout_dup(1).ready
 
   // Atom inst comes from sta / std, then its result
   // will be writebacked using load writeback port
@@ -188,6 +225,8 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
   lsq.io.hartId := io.hartId
   sbuffer.io.hartId := io.hartId
   atomicsUnit.io.hartId := io.hartId
+
+  io.fire := lsq.io.fire
 
   // dtlb
   val total_tlb_ports = ld_tlb_ports + exuParameters.StuCnt

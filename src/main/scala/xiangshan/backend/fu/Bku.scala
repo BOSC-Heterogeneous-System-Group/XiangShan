@@ -1,18 +1,18 @@
 /***************************************************************************************
-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-* Copyright (c) 2020-2021 Peng Cheng Laboratory
-*
-* XiangShan is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
+ * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+ * Copyright (c) 2020-2021 Peng Cheng Laboratory
+ *
+ * XiangShan is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ ***************************************************************************************/
 
 package xiangshan.backend.fu
 
@@ -229,16 +229,16 @@ class BlockCipherModule(implicit p: Parameters) extends XSModule {
   val imMinIn  = RegEnable(src1Bytes, io.regEnable)
 
   val aes64esm = Cat(MixFwd(Seq(aesSboxOut(4), aesSboxOut(5), aesSboxOut(6), aesSboxOut(7))),
-                     MixFwd(Seq(aesSboxOut(0), aesSboxOut(1), aesSboxOut(2), aesSboxOut(3))))
+    MixFwd(Seq(aesSboxOut(0), aesSboxOut(1), aesSboxOut(2), aesSboxOut(3))))
   val aes64dsm = Cat(MixInv(Seq(iaesSboxOut(4), iaesSboxOut(5), iaesSboxOut(6), iaesSboxOut(7))),
-                     MixInv(Seq(iaesSboxOut(0), iaesSboxOut(1), iaesSboxOut(2), iaesSboxOut(3))))
+    MixInv(Seq(iaesSboxOut(0), iaesSboxOut(1), iaesSboxOut(2), iaesSboxOut(3))))
   val aes64im  = Cat(MixInv(Seq(imMinIn(4), imMinIn(5), imMinIn(6), imMinIn(7))),
-                     MixInv(Seq(imMinIn(0), imMinIn(1), imMinIn(2), imMinIn(3))))
+    MixInv(Seq(imMinIn(0), imMinIn(1), imMinIn(2), imMinIn(3))))
 
 
   val rcon = WireInit(VecInit(Seq("h01".U, "h02".U, "h04".U, "h08".U,
-                                  "h10".U, "h20".U, "h40".U, "h80".U,
-                                  "h1b".U, "h36".U, "h00".U)))
+    "h10".U, "h20".U, "h40".U, "h80".U,
+    "h1b".U, "h36".U, "h00".U)))
 
   val ksSboxIn  = Wire(Vec(4, UInt(8.W)))
   val ksSboxTop = Reg(Vec(4, Vec(21, Bool())))
@@ -252,7 +252,7 @@ class BlockCipherModule(implicit p: Parameters) extends XSModule {
       top := SboxAesTop(in)
     }
     out := SboxAesOut(SboxInv(top))
-    }
+  }
 
   val ks1Idx = RegEnable(src2(3,0), io.regEnable)
   val aes64ks1i = Cat(ksSboxOut.asUInt ^ rcon(ks1Idx), ksSboxOut.asUInt ^ rcon(ks1Idx))
@@ -320,7 +320,7 @@ class CryptoModule(implicit p: Parameters) extends XSModule {
   io.out := Mux(funcReg(4), hashModule.io.out, blockCipherModule.io.out)
 }
 
-class Bku(implicit p: Parameters) extends FunctionUnit with HasPipelineReg {
+class Bku(implicit p: Parameters) extends FunctionUnit(64, MulDivExeUnitCfg) with HasPipelineReg {
 
   override def latency = 2
 
@@ -357,8 +357,8 @@ class Bku(implicit p: Parameters) extends FunctionUnit with HasPipelineReg {
   // CountModule, ClmulModule, MiscModule, and CryptoModule have a latency of 1 cycle
   val funcReg = uopVec(1).ctrl.fuOpType
   val result = Mux(funcReg(5), cryptoModule.io.out,
-                  Mux(funcReg(3), countModule.io.out,
-                      Mux(funcReg(2),miscModule.io.out, clmulModule.io.out)))
+    Mux(funcReg(3), countModule.io.out,
+      Mux(funcReg(2),miscModule.io.out, clmulModule.io.out)))
 
   io.out.bits.data := RegEnable(result, regEnable(2))
 }

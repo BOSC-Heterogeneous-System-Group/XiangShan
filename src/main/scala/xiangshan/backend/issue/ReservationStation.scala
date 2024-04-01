@@ -1,18 +1,18 @@
 /***************************************************************************************
-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-* Copyright (c) 2020-2021 Peng Cheng Laboratory
-*
-* XiangShan is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
+ * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+ * Copyright (c) 2020-2021 Peng Cheng Laboratory
+ *
+ * XiangShan is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ ***************************************************************************************/
 
 package xiangshan.backend.issue
 
@@ -49,6 +49,7 @@ case class RSParams
   var isStoreData: Boolean = false,
   var isMul: Boolean = false,
   var isLoad: Boolean = false,
+  var isMatu: Boolean = false,
   var exuCfg: Option[ExuConfig] = None
 ){
   def allWakeup: Int = numFastWakeup + numWakeup
@@ -87,6 +88,7 @@ class ReservationStationWrapper(implicit p: Parameters) extends LazyModule with 
       case StdExeUnitCfg => params.isStoreData = true
       case MulDivExeUnitCfg => params.isMul = true
       case LdExeUnitCfg => params.isLoad = true
+      case MatuExeUnitCfg => params.isMatu = true
       case _ =>
     }
     // TODO: why jump needs two sources?
@@ -177,7 +179,7 @@ class ReservationStationWrapper(implicit p: Parameters) extends LazyModule with 
       io.feedback.get <> rs.flatMap(_.io.feedback.get)
     }
     if (io.checkwait.isDefined) {
-     rs.foreach(_.io.checkwait.get <> io.checkwait.get)
+      rs.foreach(_.io.checkwait.get <> io.checkwait.get)
     }
     if (io.load.isDefined) {
       io.load.get <> rs.flatMap(_.io.load.get)
@@ -250,9 +252,9 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   val s2_deq = Wire(io.deq.cloneType)
 
   /**
-    * S0: Update status (from wakeup) and schedule possible instructions to issue.
-    * Instructions from dispatch will be always latched and bypassed to S1.
-    */
+   * S0: Update status (from wakeup) and schedule possible instructions to issue.
+   * Instructions from dispatch will be always latched and bypassed to S1.
+   */
   // common data
   val s0_allocatePtrOH = VecInit(select.io.allocate.map(_.bits))
   val s0_allocatePtr = VecInit(s0_allocatePtrOH.map(ptrOH => OHToUInt(ptrOH)))
@@ -368,8 +370,8 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
     else in
   }
   /**
-    * S1: read uop and data
-    */
+   * S1: read uop and data
+   */
   val s1_slowPorts = RegNext(io.slowPorts)
   val s1_fastUops = RegNext(io.fastUopsIn)
   val s1_dispatchUops_dup = if (params.isLoad) {
@@ -510,8 +512,8 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
       Mux(s1_in_selectPtrValid(i), statusArray.io.isFirstIssue(params.numEnq + i),
         statusArray.io.update(i).data.isFirstIssue))
     s1_all_src_ready(i) := Mux(s1_issue_oldest(i), statusArray.io.allSrcReady.last,
-        Mux(s1_in_selectPtrValid(i), statusArray.io.allSrcReady(params.numEnq + i),
-          statusArray.io.update(i).data.allSrcReady))
+      Mux(s1_in_selectPtrValid(i), statusArray.io.allSrcReady(params.numEnq + i),
+        statusArray.io.update(i).data.allSrcReady))
 
     XSPerfAccumulate(s"deq_oldest_override_select_$i", s1_issue_oldest(i) && s1_in_selectPtrValid(i) && s1_out(i).ready)
   }
@@ -617,10 +619,10 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   }
 
   /**
-    * S1: Data broadcast (from Regfile and FUs) and read
-    *
-    * Note: this is only needed when read-before-issue
-    */
+   * S1: Data broadcast (from Regfile and FUs) and read
+   *
+   * Note: this is only needed when read-before-issue
+   */
   // dispatch data: the next cycle after enqueue
   for (i <- 0 until params.numEnq) {
     for (j <- 0 until params.numSrc) {
@@ -665,8 +667,8 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   }
 
   /**
-    * S1: read data from regfile
-    */
+   * S1: read data from regfile
+   */
   // Do the read data arbitration
   class DataSelect(implicit p: Parameters) extends XSModule {
     val io = IO(new Bundle {
@@ -737,8 +739,8 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   }
 
   /**
-    * S1: detect bypass from fast wakeup
-    */
+   * S1: detect bypass from fast wakeup
+   */
   // control: check the fast wakeup match
   val fastWakeupMatch = Reg(Vec(params.numEntries, Vec(params.numSrc, Vec(params.numFastWakeup, Bool()))))
   for (i <- 0 until params.numEntries) {
@@ -748,8 +750,8 @@ class ReservationStation(params: RSParams)(implicit p: Parameters) extends XSMod
   }
 
   /**
-    * S2: to function units
-    */
+   * S2: to function units
+   */
   val s1_out_fire = s1_out.zip(s2_deq).map(x => x._1.valid && x._2.ready)
   val s2_issuePtr = s1_issuePtr.zip(s1_out_fire).map(x => RegEnable(x._1, x._2))
   val s2_issuePtrOH = s1_issuePtrOH.map(_.bits).zip(s1_out_fire).map(x => RegEnable(x._1, x._2))
