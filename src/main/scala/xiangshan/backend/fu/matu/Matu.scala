@@ -79,11 +79,13 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     scoreboard.io.stIO.fire := io.fire.get
 
     val ex_valid_w = dontTouch(Wire(Bool()))
+    val ex_OpType_w = dontTouch(Wire(FuOpType()))
     val rs1_w = dontTouch(Wire(UInt(3.W)))
     val rs2_w = dontTouch(Wire(UInt(3.W)))
     val rd_r = dontTouch(Reg(UInt(3.W)))
 
     ex_valid_w := scoreboard.io.fuIO.valid_out
+    ex_OpType_w := scoreboard.io.fuIO.OpType_out
     rs1_w := Mux(ex_valid_w, scoreboard.io.fuIO.rs1_out, 0.U)
     rs2_w := Mux(ex_valid_w, scoreboard.io.fuIO.rs2_out, 0.U)
     when (ex_valid_w) {

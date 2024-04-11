@@ -516,6 +516,7 @@ package object xiangshan {
   object MATUOpType {
     def mmul = "b0000".U
     def mtest      = "b0001".U
+    def mvmul = "0100".U
     def msd = "b0011".U
     def size(op: UInt) = op(1,0)
 
