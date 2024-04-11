@@ -97,6 +97,78 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
 
     val MPU = Module (new top_R(1, 8, 32, 2, 8, 2, 2))
     //val MADD = Module (new Mtest())
+    when (ex_OpType_w === MATUOpType.mmul) {
+    MPU.io.tpuIO.in.bits.in_a(0)(0) := rf2D.io.fuIO.rdata_out(0)(0)(7, 0).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(1) := rf2D.io.fuIO.rdata_out(0)(0)(15, 8).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(2) := rf2D.io.fuIO.rdata_out(0)(0)(23, 16).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(3) := rf2D.io.fuIO.rdata_out(0)(0)(31, 24).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(4) := rf2D.io.fuIO.rdata_out(0)(0)(39, 32).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(5) := rf2D.io.fuIO.rdata_out(0)(0)(47, 40).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(6) := rf2D.io.fuIO.rdata_out(0)(0)(55, 48).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(7) := rf2D.io.fuIO.rdata_out(0)(0)(63, 56).asSInt
+
+    MPU.io.tpuIO.in.bits.in_a(1)(0) := rf2D.io.fuIO.rdata_out(0)(1)(7, 0).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(1) := rf2D.io.fuIO.rdata_out(0)(1)(15, 8).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(2) := rf2D.io.fuIO.rdata_out(0)(1)(23, 16).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(3) := rf2D.io.fuIO.rdata_out(0)(1)(31, 24).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(4) := rf2D.io.fuIO.rdata_out(0)(1)(39, 32).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(5) := rf2D.io.fuIO.rdata_out(0)(1)(47, 40).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(6) := rf2D.io.fuIO.rdata_out(0)(1)(55, 48).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(7) := rf2D.io.fuIO.rdata_out(0)(1)(63, 56).asSInt
+
+    MPU.io.tpuIO.in.bits.in_b(0)(0) := rf2D.io.fuIO.rdata_out(1)(0)(7, 0).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(1) := rf2D.io.fuIO.rdata_out(1)(0)(15, 8).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(2) := rf2D.io.fuIO.rdata_out(1)(0)(23, 16).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(3) := rf2D.io.fuIO.rdata_out(1)(0)(31, 24).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(4) := rf2D.io.fuIO.rdata_out(1)(0)(39, 32).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(5) := rf2D.io.fuIO.rdata_out(1)(0)(47, 40).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(6) := rf2D.io.fuIO.rdata_out(1)(0)(55, 48).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(7) := rf2D.io.fuIO.rdata_out(1)(0)(63, 56).asSInt
+
+    MPU.io.tpuIO.in.bits.in_b(1)(0) := rf2D.io.fuIO.rdata_out(1)(1)(7, 0).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(1) := rf2D.io.fuIO.rdata_out(1)(1)(15, 8).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(2) := rf2D.io.fuIO.rdata_out(1)(1)(23, 16).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(3) := rf2D.io.fuIO.rdata_out(1)(1)(31, 24).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(4) := rf2D.io.fuIO.rdata_out(1)(1)(39, 32).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(5) := rf2D.io.fuIO.rdata_out(1)(1)(47, 40).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(6) := rf2D.io.fuIO.rdata_out(1)(1)(55, 48).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(7) := rf2D.io.fuIO.rdata_out(1)(1)(63, 56).asSInt
+    }.elsewhen(ex_OpType_w === MATUOpType.mvmul){
+    MPU.io.tpuIO.in.bits.in_a(0)(0) := rf2D.io.fuIO.rdata_out(0)(0)(7, 0).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(1) := rf2D.io.fuIO.rdata_out(0)(0)(15, 8).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(2) := rf2D.io.fuIO.rdata_out(0)(0)(23, 16).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(3) := rf2D.io.fuIO.rdata_out(0)(0)(31, 24).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(4) := rf2D.io.fuIO.rdata_out(0)(0)(39, 32).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(5) := rf2D.io.fuIO.rdata_out(0)(0)(47, 40).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(6) := rf2D.io.fuIO.rdata_out(0)(0)(55, 48).asSInt
+    MPU.io.tpuIO.in.bits.in_a(0)(7) := rf2D.io.fuIO.rdata_out(0)(0)(63, 56).asSInt
+
+    MPU.io.tpuIO.in.bits.in_a(1)(0) := rf2D.io.fuIO.rdata_out(0)(1)(7, 0).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(1) := rf2D.io.fuIO.rdata_out(0)(1)(15, 8).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(2) := rf2D.io.fuIO.rdata_out(0)(1)(23, 16).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(3) := rf2D.io.fuIO.rdata_out(0)(1)(31, 24).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(4) := rf2D.io.fuIO.rdata_out(0)(1)(39, 32).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(5) := rf2D.io.fuIO.rdata_out(0)(1)(47, 40).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(6) := rf2D.io.fuIO.rdata_out(0)(1)(55, 48).asSInt
+    MPU.io.tpuIO.in.bits.in_a(1)(7) := rf2D.io.fuIO.rdata_out(0)(1)(63, 56).asSInt
+
+    MPU.io.tpuIO.in.bits.in_b(0)(0) := rf2D.io.fuIO.rdata_out(1)(0)(7, 0).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(1) := rf2D.io.fuIO.rdata_out(1)(0)(15, 8).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(2) := rf2D.io.fuIO.rdata_out(1)(0)(23, 16).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(3) := rf2D.io.fuIO.rdata_out(1)(0)(31, 24).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(4) := rf2D.io.fuIO.rdata_out(1)(0)(39, 32).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(5) := rf2D.io.fuIO.rdata_out(1)(0)(47, 40).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(6) := rf2D.io.fuIO.rdata_out(1)(0)(55, 48).asSInt
+    MPU.io.tpuIO.in.bits.in_b(0)(7) := rf2D.io.fuIO.rdata_out(1)(0)(63, 56).asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(0) := 0.asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(1) := 0.asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(2) := 0.asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(3) := 0.asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(4) := 0.asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(5) := 0.asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(6) := 0.asSInt
+    MPU.io.tpuIO.in.bits.in_b(1)(7) := 0.asSInt
+    }.otherwise{
 
     MPU.io.tpuIO.in.bits.in_a(0)(0) := rf2D.io.fuIO.rdata_out(0)(0)(7, 0).asSInt
     MPU.io.tpuIO.in.bits.in_a(0)(1) := rf2D.io.fuIO.rdata_out(0)(0)(15, 8).asSInt
@@ -133,7 +205,7 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     MPU.io.tpuIO.in.bits.in_b(1)(5) := rf2D.io.fuIO.rdata_out(1)(1)(47, 40).asSInt
     MPU.io.tpuIO.in.bits.in_b(1)(6) := rf2D.io.fuIO.rdata_out(1)(1)(55, 48).asSInt
     MPU.io.tpuIO.in.bits.in_b(1)(7) := rf2D.io.fuIO.rdata_out(1)(1)(63, 56).asSInt
-
+    }
     MPU.io.tpuIO.in.bits.in_c(0) := 0.S
     MPU.io.tpuIO.in.bits.in_c(1) := 0.S
     MPU.io.tpuIO.in.valid := scoreboard.io.fuIO.valid_out
