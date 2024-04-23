@@ -25,6 +25,7 @@ import xiangshan._
 import xiangshan.backend.fu._
 import xiangshan.backend.fu.fpu.FMAMidResultIO
 
+
 case class ExuParameters
 (
   JmpCnt: Int,
@@ -35,11 +36,12 @@ case class ExuParameters
   FmiscCnt: Int,
   FmiscDivSqrtCnt: Int,
   LduCnt: Int,
-  StuCnt: Int
+  StuCnt: Int,
+  MatuCnt: Int
 ) {
   assert(JmpCnt == 1, "Only support 1 JmpUnit now!")
 
-  def IntExuCnt = AluCnt + MulCnt + MduCnt + JmpCnt
+  def IntExuCnt = AluCnt + MulCnt + MduCnt + JmpCnt + MatuCnt
 
   def FpExuCnt = FmacCnt + FmiscCnt + FmiscDivSqrtCnt
 
@@ -110,7 +112,7 @@ case class ExuConfig
 }
 
 @instantiable
-abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule {
+abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule with HasXSParameter{
   @public val config = cfg
 
   @public val io = IO(new Bundle() {
@@ -124,7 +126,20 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule {
   @public val fenceio = if (config == JumpCSRExeUnitCfg) Some(IO(new FenceIO)) else None
   @public val frm = if (config == FmacExeUnitCfg || config == FmiscExeUnitCfg) Some(IO(Input(UInt(3.W)))) else None
   @public val fmaMid = if (config == FmacExeUnitCfg) Some(IO(new FMAMidResultIO)) else None
-
+  @public val ldio = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Flipped(DecoupledIO(new ExuOutput))))) else None
+  @public val mpuout_data = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(XLEN.W)))) else None
+  @public val mpuout_valid = if (config == MatuExeUnitCfg) Some(IO(Output(Bool()))) else None
+  @public val mpuout_addr = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(VAddrBits.W)))) else None
+  @public val mpuout_uop = if (config == MatuExeUnitCfg) Some(IO(Output(new MicroOp))) else None
+  @public val mpuout_pc = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(VAddrBits.W)))) else None
+  @public val stin_data = if(config == StdExeUnitCfg) Some(IO(Input(UInt(XLEN.W)))) else None
+  @public val stin_valid = if(config == StdExeUnitCfg) Some(IO(Input(Bool()))) else None
+  @public val stin_uop = if(config == StdExeUnitCfg) Some(IO(Input(new MicroOp))) else None
+  @public val fire = if(config == MatuExeUnitCfg) Some(IO(Input(Bool()))) else None
+  @public val dpio = if (config == MatuExeUnitCfg) Some(IO(Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp))))) else None
+  @public val commitio_pc = if (config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(UInt(VAddrBits.W))))) else None
+  @public val commitio_valid = if(config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(Bool())))) else None
+  
   val functionUnits = config.fuConfigs.map(cfg => {
     val mod = Module(cfg.fuGen(p))
     mod.suggestName(cfg.name)

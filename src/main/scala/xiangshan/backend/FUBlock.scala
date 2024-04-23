@@ -46,9 +46,11 @@ class FUBlockExtraIO(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) ext
 
 }
 
-class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XSModule {
+class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XSModule with HasXSParameter {
   val numIn = configs.map(_._2).sum
   val numFma = configs.filter(_._1 == FmacExeUnitCfg).map(_._2).sum
+  val numMatu = configs.filter(_._1 == MatuExeUnitCfg).map(_._2).sum
+  val numStd = configs.filter(_._1 == StdExeUnitCfg).map(_._2).sum
 
   val io = IO(new Bundle {
     val redirect = Flipped(ValidIO(new Redirect))
@@ -56,6 +58,23 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val issue = Vec(numIn, Flipped(DecoupledIO(new ExuInput)))
     // out
     val writeback = Vec(numIn, DecoupledIO(new ExuOutput))
+    // from dispatch
+    val dpIn = if(numMatu > 0) Some(Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
+    // from mem
+    val ldIn = if (numMatu > 0) Some(Vec(2, Flipped(DecoupledIO(new ExuOutput)))) else None
+    val fire = if (numMatu > 0) Some (Input(Bool())) else None
+    // to mem
+    val mpuOut_data = if (numMatu > 0) Some(Output(UInt(XLEN.W))) else None
+    val mpuOut_valid = if (numMatu > 0) Some(Output(Bool())) else None
+    val mpuOut_uop = if (numMatu > 0) Some(Output(new MicroOp)) else None
+    val mpuOut_addr = if (numMatu > 0) Some(Output(UInt(VAddrBits.W))) else None
+    val mpuOut_pc = if (numMatu > 0) Some(Output(UInt(VAddrBits.W))) else None
+    // to std
+    val stIn_data = if (numMatu > 0) Some(Input(UInt(XLEN.W))) else None
+    val stIn_valid = if (numMatu > 0) Some(Input(Bool())) else None
+    // from rob
+    val commitsIn_pc = if (numMatu > 0) Some(Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
+    val commitsIn_valid = if(numMatu > 0) Some(Vec(CommitWidth, Input(Bool()))) else None
     // misc
     val extra = new FUBlockExtraIO(configs)
     val fmaMid = if (numFma > 0) Some(Vec(numFma, new FMAMidResultIO)) else None
@@ -102,6 +121,58 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
 
   if (io.fmaMid.isDefined) {
     io.fmaMid.get <> exeUnits.map(_.fmaMid).filter(_.isDefined).map(_.get)
+  }
+
+  if (io.ldIn.isDefined) {
+    io.ldIn.get <> exeUnits.map(_.ldio).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.dpIn.isDefined) {
+    io.dpIn.get <> exeUnits.map(_.dpio).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.commitsIn_pc.isDefined) {
+    io.commitsIn_pc.get <> exeUnits.map(_.commitio_pc).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.commitsIn_valid.isDefined) {
+    io.commitsIn_valid.get <> exeUnits.map(_.commitio_valid).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.mpuOut_data.isDefined) {
+    val filteredPort = exeUnits.map(_.mpuout_data).filter(_.isDefined).map(_.get)
+    if (filteredPort.nonEmpty) {
+      io.mpuOut_data.get := filteredPort.head
+    }
+  }
+
+  if (io.mpuOut_valid.isDefined) {
+    io.mpuOut_valid.get := exeUnits.map(_.mpuout_valid).filter(_.isDefined).map(_.get).reduce(_||_)
+  }
+
+  if (io.mpuOut_addr.isDefined) {
+    val filteredPort = exeUnits.map(_.mpuout_addr).filter(_.isDefined).map(_.get)
+    if (filteredPort.nonEmpty) {
+      io.mpuOut_addr.get := filteredPort.head
+    }
+  }
+
+  if (io.mpuOut_pc.isDefined) {
+    val filteredPort = exeUnits.map(_.mpuout_pc).filter(_.isDefined).map(_.get)
+    if (filteredPort.nonEmpty) {
+      io.mpuOut_pc.get := filteredPort.head
+    }
+  }
+
+  if (io.mpuOut_uop.isDefined) {
+    val filteredPort = exeUnits.map(_.mpuout_uop).filter(_.isDefined).map(_.get)
+    if (filteredPort.nonEmpty) {
+      io.mpuOut_uop.get <> filteredPort.head
+    }
+  }
+
+  if (io.fire.isDefined) {
+    io.fire.get <> exeUnits.map(_.fire).filter(_.isDefined).map(_.get).reduce(_||_)
   }
 
   for ((iss, i) <- io.issue.zipWithIndex) {

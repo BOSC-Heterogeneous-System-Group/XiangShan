@@ -151,7 +151,8 @@ case class XSCoreParameters
     FmiscCnt = 2,
     FmiscDivSqrtCnt = 0,
     LduCnt = 2,
-    StuCnt = 2
+    StuCnt = 2,
+    MatuCnt = 1
   ),
   prefetcher: Option[PrefetcherParams] = Some(SMSParams()),
   LoadPipelineWidth: Int = 2,
@@ -250,7 +251,8 @@ case class XSCoreParameters
 
   val fpExuConfigs =
     Seq.fill(exuParameters.FmacCnt)(FmacExeUnitCfg) ++
-      Seq.fill(exuParameters.FmiscCnt)(FmiscExeUnitCfg)
+      Seq.fill(exuParameters.FmiscCnt)(FmiscExeUnitCfg)++
+      Seq.fill(exuParameters.MatuCnt)(MatuExeUnitCfg)
 
   val exuConfigs: Seq[ExuConfig] = intExuConfigs ++ fpExuConfigs ++ loadExuConfigs ++ storeExuConfigs
 }
@@ -374,7 +376,7 @@ trait HasXSParameter {
   val exuParameters = coreParams.exuParameters
   val NRMemReadPorts = exuParameters.LduCnt + 2 * exuParameters.StuCnt
   val NRIntReadPorts = 2 * exuParameters.AluCnt + NRMemReadPorts
-  val NRIntWritePorts = exuParameters.AluCnt + exuParameters.MduCnt + exuParameters.LduCnt
+  val NRIntWritePorts = exuParameters.AluCnt + exuParameters.MduCnt + exuParameters.LduCnt + exuParameters.MatuCnt
   val NRFpReadPorts = 3 * exuParameters.FmacCnt + exuParameters.StuCnt
   val NRFpWritePorts = exuParameters.FpExuCnt + exuParameters.LduCnt
   val LoadPipelineWidth = coreParams.LoadPipelineWidth
@@ -402,7 +404,7 @@ trait HasXSParameter {
   val NumRs = (exuParameters.JmpCnt+1)/2 + (exuParameters.AluCnt+1)/2 + (exuParameters.MulCnt+1)/2 +
               (exuParameters.MduCnt+1)/2 + (exuParameters.FmacCnt+1)/2 +  + (exuParameters.FmiscCnt+1)/2 +
               (exuParameters.FmiscDivSqrtCnt+1)/2 + (exuParameters.LduCnt+1)/2 +
-              ((exuParameters.StuCnt+1)/2) + ((exuParameters.StuCnt+1)/2)
+              ((exuParameters.StuCnt+1)/2) + ((exuParameters.StuCnt+1)/2) + ((exuParameters.MatuCnt+1)/2)
 
   val instBytes = if (HasCExtension) 2 else 4
   val instOffsetBits = log2Ceil(instBytes)
