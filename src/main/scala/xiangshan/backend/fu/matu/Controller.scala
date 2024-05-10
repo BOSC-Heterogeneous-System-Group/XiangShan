@@ -31,7 +31,7 @@ class GlobalCounter(val maxCount:Int) extends Module {
   io.tick := tick
 }
 
-class Controller(val SA_ROWS: Int, val SA_COLS: Int) extends Module {
+class Controller(val INA_ROWS:Int, val INA_COLS:Int, val SA_ROWS: Int, val SA_COLS: Int) extends Module {
   val io = IO(new Bundle {
     val ibh_data_in_done  = Input(Bool())
     val ibv_data_in_done  = Input(Bool())
@@ -58,7 +58,7 @@ class Controller(val SA_ROWS: Int, val SA_COLS: Int) extends Module {
   val isStall = RegInit(false.B)
 
   // generate cal_done, meaning that calculation is done
-  val cal_gc       = Module(new GlobalCounter(11)) // todo ROWs和COLs取最大值
+  val cal_gc       = Module(new GlobalCounter(INA_COLS+INA_ROWS+SA_COLS-1))
   cal_gc.io.start := cal_gc_start
   when(cal_gc.io.tick) {
     cal_done := true.B

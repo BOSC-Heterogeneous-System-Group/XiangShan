@@ -97,6 +97,59 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     rf2D.io.fuIO.raddr_in(1) := rs2_w
     rf2D.io.fuIO.waddr_in := rd_r
 
+    val mpu_kill_w = dontTouch(uop.robIdx.needFlush(io.redirectIn))
+    val mpu_kill_pc_w = dontTouch(Wire(UInt(VAddrBits.W)))
+    mpu_kill_pc_w := uop.cf.pc
+
+    val ld_kill_w_s0 = dontTouch(Wire(Vec(2, Bool())))
+    val ld_kill_w_s1 = dontTouch(Wire(Vec(2, Bool())))
+    val ld_kill_w_s2 = dontTouch(Wire(Vec(2, Bool())))
+    ld_kill_w_s0 <> io.ldIn_flush_s0.get
+    ld_kill_w_s1 <> io.ldIn_flush_s1.get
+    ld_kill_w_s2 <> io.ldIn_flush_s2.get
+
+    val ld_kill_pc_w_s0 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
+    val ld_kill_pc_w_s1 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
+    val ld_kill_pc_w_s2 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
+    ld_kill_pc_w_s0 <> io.ldIn_flushPc_s0.get
+    ld_kill_pc_w_s1 <> io.ldIn_flushPc_s1.get
+    ld_kill_pc_w_s2 <> io.ldIn_flushPc_s2.get
+
+    val st_kill_w_s0 = dontTouch(Wire(Vec(2, Bool())))
+    val st_kill_w_s1 = dontTouch(Wire(Vec(2, Bool())))
+    val st_kill_w_s2 = dontTouch(Wire(Vec(2, Bool())))
+    st_kill_w_s0 <> io.stIn_flush_s0.get
+    st_kill_w_s1 <> io.stIn_flush_s1.get
+    st_kill_w_s2 <> io.stIn_flush_s2.get
+
+    val st_kill_pc_w_s0 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
+    val st_kill_pc_w_s1 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
+    val st_kill_pc_w_s2 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
+    st_kill_pc_w_s0 <> io.stIn_flushPc_s0.get
+    st_kill_pc_w_s1 <> io.stIn_flushPc_s1.get
+    st_kill_pc_w_s2 <> io.stIn_flushPc_s2.get
+
+    scoreboard.io.flushIn.st_flush_s0 <> st_kill_w_s0
+    scoreboard.io.flushIn.st_flush_s1 <> st_kill_w_s1
+    scoreboard.io.flushIn.st_flush_s2 <> st_kill_w_s2
+
+    scoreboard.io.flushIn.st_flushPc_s0 <> st_kill_pc_w_s0
+    scoreboard.io.flushIn.st_flushPc_s1 <> st_kill_pc_w_s1
+    scoreboard.io.flushIn.st_flushPc_s2 <> st_kill_pc_w_s2
+
+    scoreboard.io.flushIn.ld_flush_s0 <> ld_kill_w_s0
+    scoreboard.io.flushIn.ld_flush_s1 <> ld_kill_w_s1
+    scoreboard.io.flushIn.ld_flush_s2 <> ld_kill_w_s2
+
+    scoreboard.io.flushIn.ld_flushPc_s0 <> ld_kill_pc_w_s0
+    scoreboard.io.flushIn.ld_flushPc_s1 <> ld_kill_pc_w_s1
+    scoreboard.io.flushIn.ld_flushPc_s2 <> ld_kill_pc_w_s2
+
+    scoreboard.io.flushIn.mpu_flush(0) := mpu_kill_w
+    scoreboard.io.flushIn.mpu_flush(1) := mpu_kill_w
+    scoreboard.io.flushIn.mpu_flushPc(0) := mpu_kill_pc_w
+    scoreboard.io.flushIn.mpu_flushPc(1) := mpu_kill_pc_w
+
     val MPU = Module (new top_R(1, 8, 32, 2, 8, 2, 2))
     //val MADD = Module (new Mtest())
     when (ex_OpType_w === MATUOpType.mmul) {
@@ -278,7 +331,7 @@ class top_R (val TYPE: Int, val IN_WIDTH: Int, val C_WIDTH: Int, val INA_ROWS: I
     })
 
     val sa = Module(new SystolicArray(IN_WIDTH,C_WIDTH,SA_ROWS,SA_COLS))
-    val controller = Module(new Controller(SA_ROWS, SA_COLS))
+    val controller = Module(new Controller(INA_ROWS, INA_COLS, SA_ROWS, SA_COLS))
     val inBuffer_h   = Module(new SAInputBuffer(IN_WIDTH, INA_ROWS, INA_COLS))  // horizontal and vertical data buffer
     val inBuffer_v  = Module(new SAInputBuffer(IN_WIDTH, INA_ROWS, INA_COLS)) // TODO: add control logic to select data( B or D)
     val outBuffer  = Module(new SAOutputBuffer(TYPE, C_WIDTH, SA_COLS, SA_ROWS))

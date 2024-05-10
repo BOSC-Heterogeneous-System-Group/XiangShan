@@ -20,6 +20,7 @@ import chipsalliance.rocketchip.config.Parameters
 import chisel3._
 import chisel3.experimental.hierarchy.Instance
 import chisel3.util._
+import freechips.rocketchip.tilelink.EarlyAck
 import utils._
 import xiangshan._
 import xiangshan.backend.exu._
@@ -62,6 +63,19 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val dpIn = if(numMatu > 0) Some(Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
     // from mem
     val ldIn = if (numMatu > 0) Some(Vec(2, Flipped(DecoupledIO(new ExuOutput)))) else None
+    val ldIn_flush_s0 = if (numMatu > 0) Some(Vec(2, Input(Bool()))) else None
+    val ldIn_flush_s1 = if (numMatu > 0) Some(Vec(2, Input(Bool()))) else None
+    val ldIn_flush_s2 = if (numMatu > 0) Some(Vec(2, Input(Bool()))) else None
+    val ldIn_flushPc_s0 = if (numMatu > 0) Some(Vec(2,Input(UInt(VAddrBits.W)))) else None
+    val ldIn_flushPc_s1 = if (numMatu > 0) Some(Vec(2,Input(UInt(VAddrBits.W)))) else None
+    val ldIn_flushPc_s2 = if (numMatu > 0) Some(Vec(2,Input(UInt(VAddrBits.W)))) else None
+    val stIn_flush_s0 = if (numMatu > 0) Some(Vec(2, Input(Bool()))) else None
+    val stIn_flush_s1 = if (numMatu > 0) Some(Vec(2, Input(Bool()))) else None
+    val stIn_flush_s2 = if (numMatu > 0) Some(Vec(2, Input(Bool()))) else None
+    val stIn_flushPc_s0 = if (numMatu > 0) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+    val stIn_flushPc_s1 = if (numMatu > 0) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+    val stIn_flushPc_s2 = if (numMatu > 0) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+
     val fire = if (numMatu > 0) Some (Input(Bool())) else None
     // to mem
     val mpuOut_data = if (numMatu > 0) Some(Output(UInt(XLEN.W))) else None
@@ -127,6 +141,54 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     io.ldIn.get <> exeUnits.map(_.ldio).filter(_.isDefined).map(_.get).flatten
   }
 
+  if (io.ldIn_flush_s1.isDefined) {
+    io.ldIn_flush_s0.get <> exeUnits.map(_.ldin_flush_s0).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.ldIn_flush_s1.isDefined) {
+    io.ldIn_flush_s1.get <> exeUnits.map(_.ldin_flush_s1).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.ldIn_flush_s2.isDefined) {
+    io.ldIn_flush_s2.get <> exeUnits.map(_.ldin_flush_s2).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.ldIn_flushPc_s0.isDefined) {
+    io.ldIn_flushPc_s0.get <> exeUnits.map(_.ldin_flushPc_s0).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.ldIn_flushPc_s1.isDefined) {
+    io.ldIn_flushPc_s1.get <> exeUnits.map(_.ldin_flushPc_s1).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.ldIn_flushPc_s2.isDefined) {
+    io.ldIn_flushPc_s2.get <> exeUnits.map(_.ldin_flushPc_s2).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.stIn_flush_s0.isDefined) {
+    io.stIn_flush_s0.get <> exeUnits.map(_.stin_flush_s0).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.stIn_flush_s1.isDefined) {
+    io.stIn_flush_s1.get <> exeUnits.map(_.stin_flush_s1).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.stIn_flush_s2.isDefined) {
+    io.stIn_flush_s2.get <> exeUnits.map(_.stin_flush_s2).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.stIn_flushPc_s0.isDefined) {
+    io.stIn_flushPc_s0.get <> exeUnits.map(_.stin_flushPc_s0).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.stIn_flushPc_s1.isDefined) {
+    io.stIn_flushPc_s1.get <> exeUnits.map(_.stin_flushPc_s1).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.stIn_flushPc_s2.isDefined) {
+    io.stIn_flushPc_s2.get <> exeUnits.map(_.stin_flushPc_s2).filter(_.isDefined).map(_.get).flatten
+  }
+
   if (io.dpIn.isDefined) {
     io.dpIn.get <> exeUnits.map(_.dpio).filter(_.isDefined).map(_.get).flatten
   }
@@ -174,6 +236,7 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
   if (io.fire.isDefined) {
     io.fire.get <> exeUnits.map(_.fire).filter(_.isDefined).map(_.get).reduce(_||_)
   }
+
 
   for ((iss, i) <- io.issue.zipWithIndex) {
     XSPerfAccumulate(s"issue_count_$i", iss.fire())

@@ -127,6 +127,12 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule with
   @public val frm = if (config == FmacExeUnitCfg || config == FmiscExeUnitCfg) Some(IO(Input(UInt(3.W)))) else None
   @public val fmaMid = if (config == FmacExeUnitCfg) Some(IO(new FMAMidResultIO)) else None
   @public val ldio = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Flipped(DecoupledIO(new ExuOutput))))) else None
+  @public val ldin_flush_s0 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
+  @public val ldin_flush_s1 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
+  @public val ldin_flush_s2 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
+  @public val ldin_flushPc_s0 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(UInt(VAddrBits.W))))) else None
+  @public val ldin_flushPc_s1 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(UInt(VAddrBits.W))))) else None
+  @public val ldin_flushPc_s2 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(UInt(VAddrBits.W))))) else None
   @public val mpuout_data = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(XLEN.W)))) else None
   @public val mpuout_valid = if (config == MatuExeUnitCfg) Some(IO(Output(Bool()))) else None
   @public val mpuout_addr = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(VAddrBits.W)))) else None
@@ -134,6 +140,12 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule with
   @public val mpuout_pc = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(VAddrBits.W)))) else None
   @public val stin_data = if(config == StdExeUnitCfg) Some(IO(Input(UInt(XLEN.W)))) else None
   @public val stin_valid = if(config == StdExeUnitCfg) Some(IO(Input(Bool()))) else None
+  @public val stin_flush_s0 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
+  @public val stin_flush_s1 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
+  @public val stin_flush_s2 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
+  @public val stin_flushPc_s0 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(UInt(VAddrBits.W))))) else None
+  @public val stin_flushPc_s1 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(UInt(VAddrBits.W))))) else None
+  @public val stin_flushPc_s2 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(UInt(VAddrBits.W))))) else None
   @public val stin_uop = if(config == StdExeUnitCfg) Some(IO(Input(new MicroOp))) else None
   @public val fire = if(config == MatuExeUnitCfg) Some(IO(Input(Bool()))) else None
   @public val dpio = if (config == MatuExeUnitCfg) Some(IO(Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp))))) else None

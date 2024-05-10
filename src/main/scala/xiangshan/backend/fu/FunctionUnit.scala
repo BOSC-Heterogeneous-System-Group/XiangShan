@@ -76,6 +76,18 @@ class FunctionUnitInput(val len: Int)(implicit p: Parameters) extends XSBundle {
 class FunctionUnitIO(val len: Int, cfg: ExuConfig)(implicit p: Parameters) extends XSBundle with HasXSParameter{
   val in = Flipped(DecoupledIO(new FunctionUnitInput(len)))
   val ldIn = if (cfg == MatuExeUnitCfg) Some (Vec(2,  Flipped(DecoupledIO(new ExuOutput)))) else None
+  val ldIn_flush_s0 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(Bool()))) else None
+  val ldIn_flush_s1 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(Bool()))) else None
+  val ldIn_flush_s2 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(Bool()))) else None
+  val ldIn_flushPc_s0 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+  val ldIn_flushPc_s1 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+  val ldIn_flushPc_s2 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+  val stIn_flush_s0 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(Bool()))) else None
+  val stIn_flush_s1 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(Bool()))) else None
+  val stIn_flush_s2 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(Bool()))) else None
+  val stIn_flushPc_s0 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+  val stIn_flushPc_s1 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
+  val stIn_flushPc_s2 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
   val dpIn = if (cfg == MatuExeUnitCfg) Some (Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
   val commitIn_pc = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
   val commitIn_valid = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(Bool()))) else None

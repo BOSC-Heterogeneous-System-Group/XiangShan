@@ -271,6 +271,19 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
 
   exuBlocks.head.io.ldIn(0) <> memBlock.io.ldout_dup(0)
   exuBlocks.head.io.ldIn(1) <> memBlock.io.ldout_dup(1)
+  exuBlocks.head.io.ldIn_flush_s0 <> memBlock.io.ldout_flush_s0
+  exuBlocks.head.io.ldIn_flush_s1 <> memBlock.io.ldout_flush_s1
+  exuBlocks.head.io.ldIn_flush_s2 <> memBlock.io.ldout_flush_s2
+  exuBlocks.head.io.ldIn_flushPc_s0 <> memBlock.io.ldout_flushPc_s0
+  exuBlocks.head.io.ldIn_flushPc_s1 <> memBlock.io.ldout_flushPc_s1
+  exuBlocks.head.io.ldIn_flushPc_s2 <> memBlock.io.ldout_flushPc_s2
+
+  exuBlocks.head.io.stIn_flush_s0 <> memBlock.io.stout_flush_s0
+  exuBlocks.head.io.stIn_flush_s1 <> memBlock.io.stout_flush_s1
+  exuBlocks.head.io.stIn_flush_s2 <> memBlock.io.stout_flush_s2
+  exuBlocks.head.io.stIn_flushPc_s0 <> memBlock.io.stout_flushPc_s0
+  exuBlocks.head.io.stIn_flushPc_s1 <> memBlock.io.stout_flushPc_s1
+  exuBlocks.head.io.stIn_flushPc_s2 <> memBlock.io.stout_flushPc_s2
   memBlock.io.mpuValid <> exuBlocks.head.io.stOut.valid
   memBlock.io.mpuData <> exuBlocks.head.io.stOut.bits
   memBlock.io.mpuAddr <> exuBlocks.head.io.saddr

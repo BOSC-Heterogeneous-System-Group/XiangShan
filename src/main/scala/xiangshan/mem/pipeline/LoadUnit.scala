@@ -524,6 +524,12 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
 
     val csrCtrl = Flipped(new CustomCSRCtrlIO)
     val s2IsPointerChasing = Output(Bool())
+    val flush_s0 = Output(Bool())
+    val flushPc_s0 = Output(UInt(VAddrBits.W))
+    val flush_s1 = Output(Bool())
+    val flushPc_s1 = Output(UInt(VAddrBits.W))
+    val flush_s2 = Output(Bool())
+    val flushPc_s2 = Output(UInt(VAddrBits.W))
   })
 
   val load_s0 = Module(new LoadUnit_S0)
@@ -544,6 +550,8 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
 
   val s1_data = PipelineConnect(load_s0.io.out, load_s1.io.in, true.B,
     load_s0.io.out.bits.uop.robIdx.needFlush(io.redirect) && !s0_tryPointerChasing).get
+  io.flush_s0 := load_s0.io.out.bits.uop.robIdx.needFlush(io.redirect)
+  io.flushPc_s0 := load_s0.io.out.bits.uop.cf.pc
 
   // load s1
   load_s1.io.s1_kill := RegEnable(load_s0.io.s0_kill, false.B, load_s0.io.in.valid || io.fastpathIn.valid)
@@ -615,7 +623,8 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
 
   PipelineConnect(load_s1.io.out, load_s2.io.in, true.B,
     load_s1.io.out.bits.uop.robIdx.needFlush(io.redirect) || cancelPointerChasing)
-
+  io.flush_s1 := load_s1.io.out.bits.uop.robIdx.needFlush(io.redirect)
+  io.flushPc_s1 := load_s1.io.out.bits.uop.cf.pc
   // load s2
   io.s2IsPointerChasing := RegEnable(s1_tryPointerChasing && !cancelPointerChasing, load_s1.io.out.fire)
   io.prefetch_train.bits := load_s2.io.in.bits
@@ -763,6 +772,9 @@ class LoadUnit(implicit p: Parameters) extends XSModule with HasLoadHelper with 
   io.ldout_dup.valid := RegNext(hitLoadOut.valid) && !RegNext(load_s2.io.out.bits.uop.robIdx.needFlush(io.redirect)) ||
     RegNext(io.lsq.ldout.valid) && !RegNext(io.lsq.ldout.bits.uop.robIdx.needFlush(io.redirect)) && !RegNext(hitLoadOut.valid)
   io.ldout_dup.bits.uop.cf.exceptionVec(loadAccessFault) := s3_load_wb_meta_reg.uop.cf.exceptionVec(loadAccessFault)
+
+  io.flush_s2 := load_s2.io.out.bits.uop.robIdx.needFlush(io.redirect)
+  io.flushPc_s2 := load_s2.io.out.bits.uop.cf.pc
 
   // fast load to load forward
   io.fastpathOut.valid := RegNext(load_s2.io.out.valid) // for debug only

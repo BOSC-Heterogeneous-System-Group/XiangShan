@@ -111,6 +111,18 @@ class ExeUnit(config: ExuConfig)(implicit p: Parameters) extends Exu(config) {
     matuModules.head.io.commitIn_pc.get <> commitio_pc.get
     matuModules.head.io.commitIn_valid.get <> commitio_valid.get
     matuModules.head.io.fire.get <> fire.get
+    matuModules.head.io.ldIn_flush_s0.get <> ldin_flush_s0.get
+    matuModules.head.io.ldIn_flush_s1.get <> ldin_flush_s1.get
+    matuModules.head.io.ldIn_flush_s2.get <> ldin_flush_s2.get
+    matuModules.head.io.ldIn_flushPc_s0.get <> ldin_flushPc_s0.get
+    matuModules.head.io.ldIn_flushPc_s1.get <> ldin_flushPc_s1.get
+    matuModules.head.io.ldIn_flushPc_s2.get <> ldin_flushPc_s2.get
+    matuModules.head.io.stIn_flush_s0.get <> stin_flush_s0.get
+    matuModules.head.io.stIn_flush_s1.get <> stin_flush_s1.get
+    matuModules.head.io.stIn_flush_s2.get <> stin_flush_s2.get
+    matuModules.head.io.stIn_flushPc_s0.get <> stin_flushPc_s0.get
+    matuModules.head.io.stIn_flushPc_s1.get <> stin_flushPc_s1.get
+    matuModules.head.io.stIn_flushPc_s2.get <> stin_flushPc_s2.get
   }
 
   val stdModules = functionUnits.filter(_.isInstanceOf[Std]).map(_.asInstanceOf[Std])

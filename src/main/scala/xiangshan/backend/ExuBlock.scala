@@ -79,6 +79,19 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val fuWriteback = fuBlock.io.writeback.cloneType
     // from mem
     val ldIn = Vec(2, Flipped(DecoupledIO(new ExuOutput)))
+    val stIn_flush_s0 = Vec(2, Input(Bool()))
+    val stIn_flush_s1 = Vec(2, Input(Bool()))
+    val stIn_flush_s2 = Vec(2, Input(Bool()))
+    val stIn_flushPc_s0 = Vec(2, Input(UInt(VAddrBits.W)))
+    val stIn_flushPc_s1 = Vec(2, Input(UInt(VAddrBits.W)))
+    val stIn_flushPc_s2 = Vec(2, Input(UInt(VAddrBits.W)))
+    val ldIn_flush_s0 = Vec(2, Input(Bool()))
+    val ldIn_flush_s1 = Vec(2, Input(Bool()))
+    val ldIn_flush_s2 = Vec(2, Input(Bool()))
+    val ldIn_flushPc_s0 = Vec(2, Input(UInt(VAddrBits.W)))
+    val ldIn_flushPc_s1 = Vec(2, Input(UInt(VAddrBits.W)))
+    val ldIn_flushPc_s2 = Vec(2, Input(UInt(VAddrBits.W)))
+
     // from stu
     val fire = Input(Bool())
     // to mem
@@ -123,6 +136,55 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
 
   if (fuBlock.io.ldIn.isDefined) {
     fuBlock.io.ldIn.get <> io.ldIn
+  }
+
+  if (fuBlock.io.ldIn_flush_s0.isDefined) {
+    fuBlock.io.ldIn_flush_s0.get <> io.ldIn_flush_s0
+  }
+
+  if (fuBlock.io.ldIn_flush_s1.isDefined) {
+    fuBlock.io.ldIn_flush_s1.get <> io.ldIn_flush_s1
+  }
+
+  if (fuBlock.io.ldIn_flush_s2.isDefined) {
+    fuBlock.io.ldIn_flush_s2.get <> io.ldIn_flush_s2
+  }
+
+  if (fuBlock.io.ldIn_flushPc_s0.isDefined) {
+    fuBlock.io.ldIn_flushPc_s0.get <> io.ldIn_flushPc_s0
+  }
+
+  if (fuBlock.io.ldIn_flushPc_s1.isDefined) {
+    fuBlock.io.ldIn_flushPc_s1.get <> io.ldIn_flushPc_s1
+  }
+
+  if (fuBlock.io.ldIn_flushPc_s2.isDefined) {
+    fuBlock.io.ldIn_flushPc_s2.get <> io.ldIn_flushPc_s2
+  }
+
+  if (fuBlock.io.stIn_flush_s0.isDefined) {
+    fuBlock.io.stIn_flush_s0.get <> io.stIn_flush_s0
+  }
+
+  if (fuBlock.io.stIn_flush_s1.isDefined) {
+    fuBlock.io.stIn_flush_s1.get <> io.stIn_flush_s1
+  }
+
+  if (fuBlock.io.stIn_flush_s2.isDefined) {
+    fuBlock.io.stIn_flush_s2.get <> io.stIn_flush_s2
+  }
+
+
+  if (fuBlock.io.stIn_flushPc_s0.isDefined) {
+    fuBlock.io.stIn_flushPc_s0.get <> io.stIn_flushPc_s0
+  }
+
+  if (fuBlock.io.stIn_flushPc_s1.isDefined) {
+    fuBlock.io.stIn_flushPc_s1.get <> io.stIn_flushPc_s1
+  }
+
+  if (fuBlock.io.stIn_flushPc_s2.isDefined) {
+    fuBlock.io.stIn_flushPc_s2.get <> io.stIn_flushPc_s2
   }
 
   if (fuBlock.io.dpIn.isDefined) {
