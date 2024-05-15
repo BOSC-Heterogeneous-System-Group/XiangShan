@@ -277,6 +277,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   exuBlocks.head.io.ldIn_flushPc_s0 <> memBlock.io.ldout_flushPc_s0
   exuBlocks.head.io.ldIn_flushPc_s1 <> memBlock.io.ldout_flushPc_s1
   exuBlocks.head.io.ldIn_flushPc_s2 <> memBlock.io.ldout_flushPc_s2
+  exuBlocks.head.io.dpUopIn <> ctrlBlock.io.dpOut
 
   exuBlocks.head.io.stIn_flush_s0 <> memBlock.io.stout_flush_s0
   exuBlocks.head.io.stIn_flush_s1 <> memBlock.io.stout_flush_s1

@@ -92,6 +92,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     val ldOut = new load_out()
     val stIO = new store_io()
     val dpIn = new dispatch_in()
+    val dpUopIn = Vec(RenameWidth, Flipped(ValidIO(new MicroOp)))
     val fuIO = new fu_io()
     val commitsIO = new commits_scb_io()
     val wbIn= new writeback_in()
@@ -101,101 +102,112 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val s_idle :: s_wait :: s_commit :: s_retire :: s_unready :: s_ready :: Nil = Enum(6) // ins state
 
 
-  val OpType_w = Wire(Vec(2*dpParams.IntDqDeqWidth, FuOpType()))
-  val instr_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(32.W)))
-  val rs1_w = Wire(Vec(2 * dpParams.IntDqDeqWidth, UInt(3.W)))
-  val rs2_w = Wire(Vec(2 * dpParams.IntDqDeqWidth, UInt(3.W)))
-  val rs2_offset_w = Wire(Vec(2 * dpParams.IntDqDeqWidth, UInt(2.W))) // for store
-  val rd_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(3.W)))
-  val rd_offset_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(2.W))) // for load
-  val pc_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(VAddrBits.W)))
-  val robIdx_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(5.W)))
-  val dp_valid_w = Wire(Vec(2*dpParams.IntDqDeqWidth, Bool()))
+//  val OpType_w = Wire(Vec(2*dpParams.IntDqDeqWidth, FuOpType()))
+//  val instr_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(32.W)))
+//  val rs1_w = Wire(Vec(2 * dpParams.IntDqDeqWidth, UInt(3.W)))
+//  val rs2_w = Wire(Vec(2 * dpParams.IntDqDeqWidth, UInt(3.W)))
+//  val rs2_offset_w = Wire(Vec(2 * dpParams.IntDqDeqWidth, UInt(2.W))) // for store
+//  val rd_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(3.W)))
+//  val rd_offset_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(2.W))) // for load
+//  val pc_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(VAddrBits.W)))
+//  val robIdx_w = Wire(Vec(2*dpParams.IntDqDeqWidth, UInt(5.W)))
+//  val dp_valid_w = Wire(Vec(2*dpParams.IntDqDeqWidth, Bool()))
+
+  val OpType_w = Wire(Vec(RenameWidth, FuOpType()))
+  val instr_w = Wire(Vec(RenameWidth, UInt(32.W)))
+  val rs1_w = Wire(Vec(RenameWidth, UInt(3.W)))
+  val rs2_w = Wire(Vec(RenameWidth, UInt(3.W)))
+  val rs2_offset_w = Wire(Vec(RenameWidth, UInt(2.W))) // for store
+  val rd_w = Wire(Vec(RenameWidth, UInt(3.W)))
+  val rd_offset_w = Wire(Vec(RenameWidth, UInt(2.W))) // for load
+  val pc_w = Wire(Vec(RenameWidth, UInt(VAddrBits.W)))
+  val robIdx_w = Wire(Vec(RenameWidth, UInt(5.W)))
+  val dp_valid_w = Wire(Vec(RenameWidth, Bool()))
 
 
-  for(i <- 0 until 2 * dpParams.IntDqDeqWidth) {
-    OpType_w(i) := io.dpIn.uop_in(i).ctrl.fuOpType
-    instr_w(i) := io.dpIn.uop_in(i).cf.instr
-    rs1_w(i) := io.dpIn.uop_in(i).cf.instr(17, 15)
-    rs2_w(i) := io.dpIn.uop_in(i).cf.instr(22, 20)
-    rs2_offset_w(i) := io.dpIn.uop_in(i).cf.instr(24, 23)
-    rd_w(i) := io.dpIn.uop_in(i).cf.instr(9, 7)
-    rd_offset_w(i) := io.dpIn.uop_in(i).cf.instr(11, 10)
-    pc_w(i) := io.dpIn.uop_in(i).cf.pc
-    robIdx_w(i) := io.dpIn.uop_in(i).robIdx.value
-    dp_valid_w(i) := io.dpIn.valid_in(i) && io.dpIn.uop_in(i).cf.instr(6, 0) === "b0101011".U
+  for(i <- 0 until RenameWidth) {
+    OpType_w(i) := io.dpUopIn(i).bits.ctrl.fuOpType
+    instr_w(i) := io.dpUopIn(i).bits.cf.instr
+    rs1_w(i) := io.dpUopIn(i).bits.cf.instr(17, 15)
+    rs2_w(i) := io.dpUopIn(i).bits.cf.instr(22, 20)
+    rs2_offset_w(i) := io.dpUopIn(i).bits.cf.instr(24, 23)
+    rd_w(i) := io.dpUopIn(i).bits.cf.instr(9, 7)
+    rd_offset_w(i) := io.dpUopIn(i).bits.cf.instr(11, 10)
+    pc_w(i) := io.dpUopIn(i).bits.cf.pc
+    robIdx_w(i) := io.dpUopIn(i).bits.robIdx.value
+    dp_valid_w(i) := io.dpUopIn(i).valid && io.dpUopIn(i).bits.cf.instr(6, 0) === "b0101011".U
   }
 
   /** reorder
    * the instrs that enter the array through 8 channels are out of order, need to be first reordered
    */
 
-  val OpType_sel = WireInit(VecInit(Seq.fill(2)(0.U(7.W))))
-  val instr_sel = WireInit(VecInit(Seq.fill(2)(0.U(32.W))))
-  val rs1_sel = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
-  val rs2_sel = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
-  val rs2_offset_sel = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
-  val rd_sel = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
-  val rd_offset_sel = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
-  val pc_sel = WireInit(VecInit(Seq.fill(2)(0.U(VAddrBits.W))))
-  val robIdx_sel = WireInit(VecInit(Seq.fill(2)(0.U(5.W))))
-  val valid_sel = WireInit(VecInit(Seq.fill(2)(false.B)))
-
-  val OpType_order = WireInit(VecInit(Seq.fill(2)(0.U(7.W))))
-  val instr_order = WireInit(VecInit(Seq.fill(2)(0.U(32.W))))
-  val rs1_order = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
-  val rs2_order = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
-  val rs2_offset_order = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
-  val rd_order = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
-  val rd_offset_order = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
-  val pc_order = WireInit(VecInit(Seq.fill(2)(0.U(VAddrBits.W))))
-  val robIdx_order = WireInit(VecInit(Seq.fill(2)(0.U(5.W))))
-  val valid_order = WireInit(VecInit(Seq.fill(2)(false.B)))
-
-  OpType_sel(0) := OpType_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  instr_sel(0) := instr_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  rs1_sel(0) := rs1_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  rs2_sel(0) := rs2_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  rs2_offset_sel(0) := rs2_offset_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  rd_sel(0) := rd_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  rd_offset_sel(0) := rd_offset_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  pc_sel(0) := pc_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  robIdx_sel(0) := robIdx_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-  valid_sel(0) := dp_valid_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
-
-  OpType_sel(1) := OpType_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  instr_sel(1) := instr_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  rs1_sel(1) := rs1_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  rs2_sel(1) := rs2_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  rs2_offset_sel(1) := rs2_offset_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  rd_sel(1) := rd_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  rd_offset_sel(1) := rd_offset_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  pc_sel(1) := pc_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  robIdx_sel(1) := robIdx_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-  valid_sel(1) := dp_valid_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
-
-
-  val cmp = robIdx_sel(0) > robIdx_sel(1)
-  OpType_order(1) := Mux(cmp, OpType_sel(0), OpType_sel(1))
-  OpType_order(0) := Mux(cmp, OpType_sel(1), OpType_sel(0))
-  instr_order(1) := Mux(cmp, instr_sel(0), instr_sel(1))
-  instr_order(0) := Mux(cmp, instr_sel(1), instr_sel(0))
-  rs1_order(1) := Mux(cmp, rs1_sel(0), rs1_sel(1))
-  rs1_order(0) := Mux(cmp, rs1_sel(1), rs1_sel(0))
-  rs2_order(1) := Mux(cmp, rs2_sel(0), rs2_sel(1))
-  rs2_order(0) := Mux(cmp, rs2_sel(1), rs2_sel(0))
-  rs2_offset_order(1) := Mux(cmp, rs2_offset_sel(0), rs2_offset_sel(1))
-  rs2_offset_order(0) := Mux(cmp, rs2_offset_sel(1), rs2_offset_sel(0))
-  rd_order(1) := Mux(cmp, rd_sel(0), rd_sel(1))
-  rd_order(0) := Mux(cmp, rd_sel(1), rd_sel(0))
-  rd_offset_order(1) := Mux(cmp, rd_offset_sel(0), rd_offset_sel(1))
-  rd_offset_order(0) := Mux(cmp, rd_offset_sel(1), rd_offset_sel(0))
-  pc_order(1) := Mux(cmp, pc_sel(0), pc_sel(1))
-  pc_order(0) := Mux(cmp, pc_sel(1), pc_sel(0))
-  robIdx_order(1) := Mux(cmp, robIdx_sel(0), robIdx_sel(1))
-  robIdx_order(0) := Mux(cmp, robIdx_sel(1), robIdx_sel(0))
-  valid_order(1) := Mux(cmp, valid_sel(0), valid_sel(1))
-  valid_order(0) := Mux(cmp, valid_sel(1), valid_sel(0))
+//  val OpType_sel = WireInit(VecInit(Seq.fill(2)(0.U(7.W))))
+//  val instr_sel = WireInit(VecInit(Seq.fill(2)(0.U(32.W))))
+//  val rs1_sel = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
+//  val rs2_sel = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
+//  val rs2_offset_sel = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
+//  val rd_sel = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
+//  val rd_offset_sel = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
+//  val pc_sel = WireInit(VecInit(Seq.fill(2)(0.U(VAddrBits.W))))
+//  val robIdx_sel = WireInit(VecInit(Seq.fill(2)(0.U(5.W))))
+//  val valid_sel = WireInit(VecInit(Seq.fill(2)(false.B)))
+//
+//  val OpType_order = WireInit(VecInit(Seq.fill(2)(0.U(7.W))))
+//  val instr_order = WireInit(VecInit(Seq.fill(2)(0.U(32.W))))
+//  val rs1_order = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
+//  val rs2_order = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
+//  val rs2_offset_order = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
+//  val rd_order = WireInit(VecInit(Seq.fill(2)(0.U(3.W))))
+//  val rd_offset_order = WireInit(VecInit(Seq.fill(2)(0.U(2.W))))
+//  val pc_order = WireInit(VecInit(Seq.fill(2)(0.U(VAddrBits.W))))
+//  val robIdx_order = WireInit(VecInit(Seq.fill(2)(0.U(5.W))))
+//  val valid_order = WireInit(VecInit(Seq.fill(2)(false.B)))
+//
+//  OpType_sel(0) := OpType_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  instr_sel(0) := instr_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  rs1_sel(0) := rs1_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  rs2_sel(0) := rs2_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  rs2_offset_sel(0) := rs2_offset_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  rd_sel(0) := rd_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  rd_offset_sel(0) := rd_offset_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  pc_sel(0) := pc_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  robIdx_sel(0) := robIdx_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//  valid_sel(0) := dp_valid_w(PriorityEncoder(dp_valid_w.asUInt(3, 0)))
+//
+//  OpType_sel(1) := OpType_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  instr_sel(1) := instr_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  rs1_sel(1) := rs1_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  rs2_sel(1) := rs2_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  rs2_offset_sel(1) := rs2_offset_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  rd_sel(1) := rd_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  rd_offset_sel(1) := rd_offset_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  pc_sel(1) := pc_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  robIdx_sel(1) := robIdx_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//  valid_sel(1) := dp_valid_w(PriorityEncoder(dp_valid_w.asUInt(7, 4))+4.U)
+//
+//
+//  val cmp = robIdx_sel(0) > robIdx_sel(1)
+//  OpType_order(1) := Mux(cmp, OpType_sel(0), OpType_sel(1))
+//  OpType_order(0) := Mux(cmp, OpType_sel(1), OpType_sel(0))
+//  instr_order(1) := Mux(cmp, instr_sel(0), instr_sel(1))
+//  instr_order(0) := Mux(cmp, instr_sel(1), instr_sel(0))
+//  rs1_order(1) := Mux(cmp, rs1_sel(0), rs1_sel(1))
+//  rs1_order(0) := Mux(cmp, rs1_sel(1), rs1_sel(0))
+//  rs2_order(1) := Mux(cmp, rs2_sel(0), rs2_sel(1))
+//  rs2_order(0) := Mux(cmp, rs2_sel(1), rs2_sel(0))
+//  rs2_offset_order(1) := Mux(cmp, rs2_offset_sel(0), rs2_offset_sel(1))
+//  rs2_offset_order(0) := Mux(cmp, rs2_offset_sel(1), rs2_offset_sel(0))
+//  rd_order(1) := Mux(cmp, rd_sel(0), rd_sel(1))
+//  rd_order(0) := Mux(cmp, rd_sel(1), rd_sel(0))
+//  rd_offset_order(1) := Mux(cmp, rd_offset_sel(0), rd_offset_sel(1))
+//  rd_offset_order(0) := Mux(cmp, rd_offset_sel(1), rd_offset_sel(0))
+//  pc_order(1) := Mux(cmp, pc_sel(0), pc_sel(1))
+//  pc_order(0) := Mux(cmp, pc_sel(1), pc_sel(0))
+//  robIdx_order(1) := Mux(cmp, robIdx_sel(0), robIdx_sel(1))
+//  robIdx_order(0) := Mux(cmp, robIdx_sel(1), robIdx_sel(0))
+//  valid_order(1) := Mux(cmp, valid_sel(0), valid_sel(1))
+//  valid_order(0) := Mux(cmp, valid_sel(1), valid_sel(0))
 
   val state_array = dontTouch(RegInit(VecInit(Seq.fill(32)(s_idle))))
   val next_state_array = dontTouch(WireInit(state_array))
@@ -211,6 +223,8 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val rd_offset_array = dontTouch(Reg(Vec(32, UInt(2.W))))
   val pc_array = dontTouch(Reg(Vec(32, UInt(VAddrBits.W))))
   val robIdx_array = dontTouch(Reg(Vec(32, UInt(4.W))))
+  val cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
+  val next_cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
   val saddr_array = dontTouch(Reg(Vec(32, UInt(VAddrBits.W))))
 
   val flush_w = dontTouch(Wire(Vec(32, Bool())))
@@ -238,11 +252,11 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val readPtr = RegInit(0.U(6.W))
   next_writeCnt_redirect := PriorityEncoder(flush_w.asUInt)
   next_writePtr_redirect := Cat(writePtr(5), next_writeCnt_redirect)
-  next_writePtr := Mux(flush_w.asUInt.orR, next_writePtr_redirect, writePtr + PopCount(valid_order))
+  next_writePtr := Mux(flush_w.asUInt.orR, next_writePtr_redirect, writePtr + PopCount(dp_valid_w))
   writePtr := next_writePtr
 
-  val enq_offset = dontTouch(Wire(Vec(2, UInt(6.W))))
-  val offset = (0 until 2).map(i => PopCount(valid_order.take(i)))
+  val enq_offset = dontTouch(Wire(Vec(RenameWidth, UInt(6.W))))
+  val offset = (0 until RenameWidth).map(i => PopCount(dp_valid_w.take(i)))
   enq_offset := offset
 
   /** enqueue
@@ -251,18 +265,19 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * the corresponding state is set to s_wait
    * Entry type: 1. OpType  2. rs1 2. rs2 3. rs2_offset 4. rd  5. rd_offset  6. pc  7. robIdx  8. state
    */
-  for(i <- 0 until 2) {
-    when(state_array(writePtr(4, 0) + enq_offset(i)) === s_idle && valid_order(i) === true.B){
-      OpType_array(writePtr(4, 0) + enq_offset(i)) := OpType_order(i)
-      instr_array(writePtr(4, 0) + enq_offset(i)) := instr_order(i)
-      rs1_array(writePtr(4, 0) + enq_offset(i)) := rs1_order(i)
-      rs2_array(writePtr(4, 0) + enq_offset(i)) := rs2_order(i)
-      rs2_offset_array(writePtr(4, 0) + enq_offset(i)) := rs2_offset_order(i)
-      rd_array(writePtr(4, 0) + enq_offset(i)) := rd_order(i)
-      rd_offset_array(writePtr(4, 0) + enq_offset(i)) := rd_offset_order(i)
-      pc_array(writePtr(4, 0) + enq_offset(i)) := pc_order(i)
-      robIdx_array(writePtr(4, 0) + enq_offset(i)) := robIdx_order(i)
+  for(i <- 0 until RenameWidth) {
+    when(state_array(writePtr(4, 0) + enq_offset(i)) === s_idle && dp_valid_w(i) === true.B){
+      OpType_array(writePtr(4, 0) + enq_offset(i)) := OpType_w(i)
+      instr_array(writePtr(4, 0) + enq_offset(i)) := instr_w(i)
+      rs1_array(writePtr(4, 0) + enq_offset(i)) := rs1_w(i)
+      rs2_array(writePtr(4, 0) + enq_offset(i)) := rs2_w(i)
+      rs2_offset_array(writePtr(4, 0) + enq_offset(i)) := rs2_offset_w(i)
+      rd_array(writePtr(4, 0) + enq_offset(i)) := rd_w(i)
+      rd_offset_array(writePtr(4, 0) + enq_offset(i)) := rd_offset_w(i)
+      pc_array(writePtr(4, 0) + enq_offset(i)) := pc_w(i)
+      robIdx_array(writePtr(4, 0) + enq_offset(i)) := robIdx_w(i)
       next_state_array(writePtr(4, 0) + enq_offset(i)) := s_wait
+      cnt_array(writePtr(4, 0) + enq_offset(i)) := next_cnt_array(writePtr(4, 0) + enq_offset(i))
     }
   }
 
@@ -300,12 +315,12 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * state: s_commit -> s_retire
    * when the instr finally writeback data to regfile, the state of instr is set to s_retire
    */
-  for (i <- 0 until 31) {
+  for (i <- 0 until 32) {
     val commit_flag = Seq.tabulate(CommitWidth)(j =>
       state_array(i) === s_wait && io.commitsIO.commits_valid(j) && io.commitsIO.commits_pc(j) === pc_array(i)
     )
     when(state_array(i) === s_wait) {
-      next_state_array(i) := Mux(flush_w(i) && (next_writeCnt_redirect <= i.U), s_idle, Mux(commit_flag.reduce(_||_), s_commit, s_wait))
+      next_state_array(i) := Mux(flush_w.asUInt.orR && (next_writeCnt_redirect <= cnt_array(i)), s_idle, Mux(commit_flag.reduce(_||_), s_commit, s_wait))
     }
   }
 
@@ -315,7 +330,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                        OpType_array(i) === LSUOpType.mld
     commitVec(1)(i) := state_array(i) === s_commit && io.wbIn.wen(1) && io.wbIn.waddr(1) === rd_array(i) && rs1_ready_array(i) === s_ready && rs2_ready_array(i) === s_ready &&
                       (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest)
-    commitVec(2)(i) := state_array(i) === s_commit && OpType_array(i) === LSUOpType.sd && io.stIO.fire
+    commitVec(2)(i) := (state_array(i) === s_commit) && (OpType_array(i) === LSUOpType.sd)
   }
 
   /*  Seq.tabulate(3)(i =>
@@ -333,7 +348,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     commitVecUInt(i) := commitVec(i).asUInt
   }
 
-  val selBits = Seq.tabulate(3)(i => Seq.tabulate(32)(j => Mux(j.U >= readPtr, true.B, false.B)))
+  val selBits = Seq.tabulate(3)(i => Seq.tabulate(32)(j => Mux(j.U >= readPtr(4, 0), true.B, false.B)))
   val shiftedIndices = Wire(Vec(3, Vec(32, UInt(5.W))))
   for (i <- 0 until 3) {
     for (j <- 0 until 32) {
@@ -346,6 +361,10 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     }
   }
 
+//  for (i <- 0 until 32) {
+//    next_state_array(i) := Mux(state_array(i) === s_commit && OpType_array(i) === LSUOpType.sd && io.stIO.fire)
+//  }
+
   for (i <- 0 until 3) {
     when(commitVec(i).asUInt.orR) {
       next_state_array(readPtr + PriorityEncoder(real_commitVec(i))) := s_retire
@@ -356,38 +375,37 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * state: s_unready -> s_ready, s_ready -> s_unready
    */
   for (i <- 0 until 32) {
-    val rs1MatchVec_1 = dontTouch(Wire(Vec(i, Bool())))
-    val rs1MatchVec_2 = dontTouch(Wire(Vec(i, Bool())))
-    val real_rs1MatchVec = dontTouch(Wire(Vec(i, Bool())))
-    for (j <- 0 until i) {
-      rs1MatchVec_1(j) := rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit)  && (OpType_array(i) === MATUOpType.mmul ||
-                          OpType_array(i) === MATUOpType.mtest) && (state_array(j) === s_retire || state_array(j) === s_idle) &&
-                          readPtr(5) === writePtr(5)
+    val rs1MatchVec_1 = dontTouch(Wire(Vec(32, Bool())))
+    val rs1MatchVec_2 = dontTouch(Wire(Vec(32, Bool())))
+    val real_rs1MatchVec = dontTouch(Wire(Vec(32, Bool())))
+    for (j <- 0 until 32) {
+      rs1MatchVec_1(j) := rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) && (OpType_array(i) === MATUOpType.mmul ||
+        OpType_array(i) === MATUOpType.mtest) && (state_array(j) === s_retire || state_array(j) === s_idle) && (cnt_array(j) < cnt_array(i))
       rs1MatchVec_2(j) := rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) && (OpType_array(i) === MATUOpType.mmul ||
-                          OpType_array(i) === MATUOpType.mtest)
-      real_rs1MatchVec(j) := ((rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit)  && (OpType_array(i) === MATUOpType.mmul ||
-                             OpType_array(i) === MATUOpType.mtest) && (state_array(j) === s_retire || state_array(j) === s_idle) &&
-                             readPtr(5) === writePtr(5)) === (rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) &&
-                            (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest))) &&
-                            (state_array(i) === s_wait || state_array(i) === s_commit)
+        OpType_array(i) === MATUOpType.mtest) && (cnt_array(j) < cnt_array(i))
+      real_rs1MatchVec(j) := ((rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) && (OpType_array(i) === MATUOpType.mmul ||
+        OpType_array(i) === MATUOpType.mtest) && (state_array(j) === s_retire || state_array(j) === s_idle) &&
+        (cnt_array(j) < cnt_array(i))) === (rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) &&
+        (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) && (cnt_array(j) < cnt_array(i)))) &&
+        (state_array(i) === s_wait || state_array(i) === s_commit)
     }
     rs1_ready_array(i) := Mux(real_rs1MatchVec.asUInt.andR, s_ready, s_unready)
   }
 
   for (i <- 0 until 32) {
-    val rs2MatchVec_1 = dontTouch(Wire(Vec(i, Bool())))
-    val rs2MatchVec_2 = dontTouch(Wire(Vec(i, Bool())))
-    val real_rs2MatchVec = dontTouch(Wire(Vec(i, Bool())))
-    for (j <- 0 until i) {
+    val rs2MatchVec_1 = dontTouch(Wire(Vec(32, Bool())))
+    val rs2MatchVec_2 = dontTouch(Wire(Vec(32, Bool())))
+    val real_rs2MatchVec = dontTouch(Wire(Vec(32, Bool())))
+    for (j <- 0 until 32) {
       rs2MatchVec_1(j) := rd_array(j) === rs2_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) && (OpType_array(i) === MATUOpType.mmul ||
                           OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd) &&  (state_array(j) === s_retire || state_array(j) === s_idle) &&
-                          readPtr(5) === writePtr(5)
+                          (cnt_array(j) < cnt_array(i))
       rs2MatchVec_2(j) := rd_array(j) === rs2_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) && (OpType_array(i) === MATUOpType.mmul ||
-                          OpType_array(i) === MATUOpType.mtest || OpType_array(i) ===LSUOpType.sd)
+                          OpType_array(i) === MATUOpType.mtest || OpType_array(i) ===LSUOpType.sd) && (cnt_array(j) < cnt_array(i))
       real_rs2MatchVec(j) := ((rd_array(j) === rs2_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) && (OpType_array(i) === MATUOpType.mmul ||
-                             OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd) && (state_array(j) === s_retire || state_array(j) === s_idle) &&
-                             readPtr(5) === writePtr(5)) === (rd_array(j) === rs2_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) &&
-                             (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd))) &&
+                             OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd) && (state_array(j) === s_retire || state_array(j) === s_idle) && (cnt_array(j) < cnt_array(i)))
+                             === (rd_array(j) === rs2_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) &&
+                             (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd) && (cnt_array(j) < cnt_array(i)))) &&
                              (state_array(i) === s_wait || state_array(i) === s_commit)
     }
     rs2_ready_array(i) := Mux(real_rs2MatchVec.asUInt.andR, s_ready, s_unready)
@@ -398,15 +416,15 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * */
   val rd_ready_array = dontTouch(RegInit(VecInit(Seq.fill(32)(s_ready))))
   for (i <- 0 until 32) {
-    val m_wawMatchVec = dontTouch(Wire(Vec(i, Bool())))
-    val m_warMatchVec = dontTouch(Wire(Vec(i, Bool())))
-    for (j <- 0 until i) {
+    val m_wawMatchVec = dontTouch(Wire(Vec(32, Bool())))
+    val m_warMatchVec = dontTouch(Wire(Vec(32, Bool())))
+    for (j <- 0 until 32) {
       m_wawMatchVec(j) := rd_array(j) === rd_array(i) && (OpType_array(i) === MATUOpType.mtest || OpType_array(i) === MATUOpType.mmul) && (state_array(j) === s_wait || state_array(j) === s_commit) &&
         (state_array(i) === s_commit || state_array(i) === s_wait) && ((OpType_array(j) === LSUOpType.mld && rd_offset_array(i) === rd_offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
-        OpType_array(j) === MATUOpType.mtest))
+        OpType_array(j) === MATUOpType.mtest)) && (cnt_array(j) < cnt_array(i))
       m_warMatchVec(j) := (rs1_array(j) === rd_array(i) || rs2_array(j) === rd_array(i)) && (OpType_array(i) === MATUOpType.mtest || OpType_array(i) === MATUOpType.mmul) && (state_array(j) === s_wait || state_array(j) === s_commit) &&
         (state_array(i) === s_commit || state_array(i) === s_wait) && ((OpType_array(j) === LSUOpType.sd && rd_offset_array(i) === rs2_offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
-        OpType_array(j) === MATUOpType.mtest))
+        OpType_array(j) === MATUOpType.mtest)) && (cnt_array(j) < cnt_array(i))
     }
     rd_ready_array(i) := Mux(m_wawMatchVec.asUInt.orR || m_warMatchVec.asUInt.orR, s_unready, s_ready)
   }
@@ -417,9 +435,9 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     rs_ready_vec(i) := rs1_ready_array(i) === s_ready && rs2_ready_array(i) === s_ready && rd_ready_array(i) === s_ready &&
                       (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) &&
                       (state_array(i) === s_wait || state_array(i) === s_commit)
-    val stMatchVec = dontTouch(Wire(Vec(i, Bool())))
-    for (j <- 0 until i) {
-      stMatchVec(j) := OpType_array(j) === LSUOpType.sd && state_array(j) === s_wait
+    val stMatchVec = dontTouch(Wire(Vec(32, Bool())))
+    for (j <- 0 until 32) {
+      stMatchVec(j) := OpType_array(j) === LSUOpType.sd && state_array(j) === s_wait && (cnt_array(j) < cnt_array(i))
     }
     st_ready_vec(i) := rs2_ready_array(i) === s_ready && OpType_array(i) === LSUOpType.sd && (state_array(i) === s_wait || state_array(i) === s_commit) && !stMatchVec.asUInt.orR
   }
@@ -443,11 +461,11 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * */
   val ld_waw_vec = Wire(Vec(32, Bool()))
   for (i <- 0 until 32) {
-    val ld_wawMatchVec = dontTouch(Wire(Vec(i, Bool())))
-    for (j <- 0 until i) {
+    val ld_wawMatchVec = dontTouch(Wire(Vec(32, Bool())))
+    for (j <- 0 until 32) {
       ld_wawMatchVec(j) := rd_array(j) === rd_array(i) && OpType_array(i) === LSUOpType.mld && (state_array(j) === s_wait || state_array(j) === s_commit) &&
         (state_array(i) === s_commit || state_array(i) === s_wait) && ((OpType_array(j) === LSUOpType.mld && rd_offset_array(i) === rd_offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
-                    OpType_array(j) === MATUOpType.mtest))
+                    OpType_array(j) === MATUOpType.mtest)) && (cnt_array(j) < cnt_array(i))
     }
     ld_waw_vec(i) := ld_wawMatchVec.asUInt.orR
   }
@@ -457,11 +475,11 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * */
   val ld_war_vec = Wire(Vec(32, Bool()))
   for (i <- 0 until 32) {
-    val ld_warMatchVec = dontTouch(Wire(Vec(i, Bool())))
-    for (j <- 0 until i) {
+    val ld_warMatchVec = dontTouch(Wire(Vec(32, Bool())))
+    for (j <- 0 until 32) {
       ld_warMatchVec(j) := (rs1_array(j) === rd_array(i) || rs2_array(j) === rd_array(i)) && OpType_array(i) === LSUOpType.mld && (state_array(j) === s_wait || state_array(j) === s_commit) &&
         (state_array(i) === s_commit || state_array(i) === s_wait) && ((OpType_array(j) === LSUOpType.mld && rd_offset_array(i) === rd_offset_array(j)) || (OpType_array(j) === MATUOpType.mmul ||
-        OpType_array(j) === MATUOpType.mtest))
+        OpType_array(j) === MATUOpType.mtest)) && (cnt_array(j) < cnt_array(i))
     }
     ld_war_vec(i) := ld_warMatchVec.asUInt.orR
   }
@@ -484,6 +502,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    */
   when(state_array(readPtr(4, 0)) === s_retire) {
     next_state_array(readPtr(4, 0)) := s_idle
+    next_cnt_array(readPtr(4, 0)) := cnt_array(readPtr(4, 0)) + 32.U
     readPtr := readPtr + 1.U
   }
 

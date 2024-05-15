@@ -68,6 +68,7 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
     val singleStep = Input(Bool())
     // lfst
     val lfst = new DispatchLFSTIO
+      val dpOut = Vec(RenameWidth, ValidIO(new MicroOp))
   })
 
   /**
@@ -103,6 +104,13 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
 
   val updatedUop = Wire(Vec(RenameWidth, new MicroOp))
   val updatedCommitType = Wire(Vec(RenameWidth, CommitType()))
+
+  for (i <- 0 until RenameWidth) {
+    io.dpOut(i).bits := updatedUop(i)
+    io.dpOut(i).valid := io.fromRename(i).valid
+  }
+
+
 
   for (i <- 0 until RenameWidth) {
     updatedCommitType(i) := Cat(isLs(i), (isStore(i) && !isAMO(i)) | isBranch(i))

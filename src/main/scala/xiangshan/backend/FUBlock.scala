@@ -61,6 +61,7 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val writeback = Vec(numIn, DecoupledIO(new ExuOutput))
     // from dispatch
     val dpIn = if(numMatu > 0) Some(Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
+    val dpUopIn = if(numMatu > 0) Some(Vec(RenameWidth, Flipped(ValidIO(new MicroOp)))) else None
     // from mem
     val ldIn = if (numMatu > 0) Some(Vec(2, Flipped(DecoupledIO(new ExuOutput)))) else None
     val ldIn_flush_s0 = if (numMatu > 0) Some(Vec(2, Input(Bool()))) else None
@@ -191,6 +192,10 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
 
   if (io.dpIn.isDefined) {
     io.dpIn.get <> exeUnits.map(_.dpio).filter(_.isDefined).map(_.get).flatten
+  }
+
+  if (io.dpUopIn.isDefined) {
+    io.dpUopIn.get <> exeUnits.map(_.dp_uop_in).filter(_.isDefined).map(_.get).flatten
   }
 
   if (io.commitsIn_pc.isDefined) {

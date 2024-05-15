@@ -127,6 +127,7 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule with
   @public val frm = if (config == FmacExeUnitCfg || config == FmiscExeUnitCfg) Some(IO(Input(UInt(3.W)))) else None
   @public val fmaMid = if (config == FmacExeUnitCfg) Some(IO(new FMAMidResultIO)) else None
   @public val ldio = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Flipped(DecoupledIO(new ExuOutput))))) else None
+  @public val dp_uop_in = if (config == MatuExeUnitCfg) Some(IO(Vec(RenameWidth, Flipped(ValidIO(new MicroOp))))) else None
   @public val ldin_flush_s0 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
   @public val ldin_flush_s1 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None
   @public val ldin_flush_s2 = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Input(Bool())))) else None

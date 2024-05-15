@@ -89,6 +89,7 @@ class FunctionUnitIO(val len: Int, cfg: ExuConfig)(implicit p: Parameters) exten
   val stIn_flushPc_s1 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
   val stIn_flushPc_s2 = if (cfg == MatuExeUnitCfg) Some(Vec(2, Input(UInt(VAddrBits.W)))) else None
   val dpIn = if (cfg == MatuExeUnitCfg) Some (Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))) else None
+  val dpUopIn = if (cfg == MatuExeUnitCfg) Some (Vec(RenameWidth, Flipped(ValidIO(new MicroOp)))) else None
   val commitIn_pc = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
   val commitIn_valid = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(Bool()))) else None
   val stIn = if(cfg == StdExeUnitCfg) Some(Flipped(ValidIO(UInt(XLEN.W)))) else None

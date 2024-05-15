@@ -71,6 +71,7 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val allocPregs = scheduler.io.allocPregs.cloneType
     val in = scheduler.io.in.cloneType
     val dpIn = Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))
+    val dpUopIn = Vec(RenameWidth, Flipped(ValidIO(new MicroOp)))
     // issue and wakeup ports
     val issue = if (numOutFu > 0) Some(Vec(numOutFu, DecoupledIO(new ExuInput))) else None
     val fastUopOut = scheduler.io.fastUopOut.cloneType
@@ -229,6 +230,10 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
 
   if (fuBlock.io.fire.isDefined) {
     fuBlock.io.fire.get := io.fire
+  }
+
+  if (fuBlock.io.dpUopIn.isDefined) {
+    fuBlock.io.dpUopIn.get <> io.dpUopIn
   }
 
   // To reduce fanout, we add registers here for redirect.

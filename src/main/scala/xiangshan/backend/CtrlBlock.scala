@@ -196,6 +196,7 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     val allocPregs = Vec(RenameWidth, Output(new ResetPregStateReq))
     val dispatch = Vec(3*dpParams.IntDqDeqWidth, DecoupledIO(new MicroOp))
     val dispatch2mpu = Vec(2*dpParams.IntDqDeqWidth, DecoupledIO(new MicroOp))
+    val dpOut = Vec(RenameWidth, ValidIO(new MicroOp))
     val rsReady = Vec(outer.dispatch2.map(_.module.io.out.length).sum, Input(Bool()))
     val enqLsq = Flipped(new LsqEnqIO)
     val lqCancelCnt = Input(UInt(log2Up(LoadQueueSize + 1).W))
@@ -275,6 +276,7 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
   pcMem.io.waddr.head := RegNext(io.frontend.fromFtq.pc_mem_waddr)
   pcMem.io.wdata.head := RegNext(io.frontend.fromFtq.pc_mem_wdata)
 
+  io.dpOut <> dispatch.io.dpOut
 
   pcMem.io.raddr.last := rob.io.flushOut.bits.ftqIdx.value
   val flushPC = pcMem.io.rdata.last.getPc(RegNext(rob.io.flushOut.bits.ftqOffset))

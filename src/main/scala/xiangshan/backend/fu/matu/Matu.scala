@@ -53,6 +53,7 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
 
     scoreboard.io.dpIn.uop_in <> dp_in_uop_w
     scoreboard.io.dpIn.valid_in <> dp_in_valid_w
+    scoreboard.io.dpUopIn <> io.dpUopIn.get
     scoreboard.io.commitsIO.commits_pc <> io.commitIn_pc.get
     scoreboard.io.commitsIO.commits_valid <> io.commitIn_valid.get
     scoreboard.io.wbIn.wen(0) := rf2D.io.wbInfoOut.ld_wen
