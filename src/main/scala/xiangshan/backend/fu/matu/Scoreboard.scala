@@ -224,6 +224,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val pc_array = dontTouch(Reg(Vec(32, UInt(VAddrBits.W))))
   val robIdx_array = dontTouch(Reg(Vec(32, UInt(4.W))))
   val cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
+  val time_out_cnt_array = dontTouch(RegInit(VecInit(Seq.fill(32)(0.U(10.W)))))
   val next_cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
   val saddr_array = dontTouch(Reg(Vec(32, UInt(VAddrBits.W))))
 
@@ -240,6 +241,12 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                     (  io.flushIn.mpu_flush(j) &   (io.flushIn.mpu_flushPc(j) === pc_array(i)) & (state_array(i) === s_wait))
     }
   }
+
+  time_out_cnt_array(0) := Mux(state_array(0)===s_wait && state_array(31)=/=s_wait, time_out_cnt_array(0)+1.U, 0.U)
+  for (i <- 1 until 32) {
+    time_out_cnt_array(i) := Mux(state_array(i)===s_wait && state_array(i-1)=/=s_wait, time_out_cnt_array(i)+1.U, 0.U)
+  }
+
 
   for (i <- 0 until 32) {
     state_array(i) := next_state_array(i)
@@ -320,9 +327,10 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
       state_array(i) === s_wait && io.commitsIO.commits_valid(j) && io.commitsIO.commits_pc(j) === pc_array(i)
     )
     when(state_array(i) === s_wait) {
-      next_state_array(i) := Mux(flush_w.asUInt.orR && (next_writeCnt_redirect <= cnt_array(i)), s_idle, Mux(commit_flag.reduce(_||_), s_commit, s_wait))
+      next_state_array(i) := Mux(time_out_cnt_array(i) >= 256.U, s_retire, Mux(flush_w.asUInt.orR && (next_writeCnt_redirect <= cnt_array(i)), s_idle, Mux(commit_flag.reduce(_||_), s_commit, s_wait)))
     }
   }
+
 
   val commitVec = Wire(Vec(3, Vec(32, Bool())))
   for (i <- 0 until 32) {
