@@ -284,6 +284,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
     val lsq = new RobLsqIO
     val robDeqPtr = Output(new RobPtr)
     val deqPtrVec_v = Vec(CommitWidth, Output(UInt(5.W)))
+    val deqPtrVec = Vec(CommitWidth, Output(new RobPtr))
     val csr = new RobCSRIO
     val robFull = Output(Bool())
     val cpu_halt = Output(Bool())
@@ -343,6 +344,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
     deqPtrVec_v(i) := deqPtrVec(i).value
   }
   io.deqPtrVec_v := deqPtrVec_v
+  io.deqPtrVec := deqPtrVec
 
   val isEmpty = enqPtr === deqPtr
   val isReplaying = io.redirect.valid && RedirectLevel.flushItself(io.redirect.bits.level)
@@ -595,6 +597,7 @@ class RobImp(outer: Rob)(implicit p: Parameters) extends LazyModuleImp(outer)
     io.commits.commitValid(i) := commit_v(i) && commit_w(i) && !isBlocked
     io.commits.info(i).connectDispatchData(dispatchDataRead(i))
     io.commits.info(i).pc := debug_microOp(deqPtrVec(i).value).cf.pc
+    io.commits.info(i).robIdx := debug_microOp(deqPtrVec(i).value).robIdx
 
     io.commits.walkValid(i) := shouldWalkVec(i)
     when (io.commits.isWalk && state === s_walk && shouldWalkVec(i)) {

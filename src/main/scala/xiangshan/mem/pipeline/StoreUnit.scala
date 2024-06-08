@@ -98,6 +98,7 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule {
     val mpuData = Input(UInt(XLEN.W))
     val mpuValid = Input(Bool())
     val mpuPC = Input(UInt(VAddrBits.W))
+    val mpuRobIdx = Input(UInt(5.W))
     val out = Decoupled(new LsPipelineBundle)
     val lsq = ValidIO(new LsPipelineBundle())
     val dtlbResp = Flipped(DecoupledIO(new TlbResp()))
@@ -123,7 +124,7 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule {
   io.rsFeedback.valid := io.in.valid
   io.rsFeedback.bits.hit := (!s1_tlb_miss && !(io.in.bits.uop.cf.instr(6, 0) === "b0101011".U)) ||
     (!s1_tlb_miss && (io.in.bits.uop.cf.instr(6, 0) === "b0101011".U) && io.mpuValid &&
-      (io.in.bits.uop.cf.pc === io.mpuPC))//TODO: add mpu cond
+      (io.in.bits.uop.cf.pc === io.mpuPC) && (io.in.bits.uop.robIdx.value === io.mpuRobIdx))//TODO: add mpu cond
   io.rsFeedback.bits.flushState := io.dtlbResp.bits.ptwBack
   io.rsFeedback.bits.rsIdx := io.in.bits.rsIdx
   io.rsFeedback.bits.sourceType := RSFeedbackType.tlbMiss
@@ -138,7 +139,7 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule {
   // writeback store inst to lsq
   io.out.valid := io.in.valid && ((!s1_tlb_miss && !(io.in.bits.uop.cf.instr(6, 0) === "b0101011".U)) ||
     (!s1_tlb_miss && (io.in.bits.uop.cf.instr(6, 0) === "b0101011".U) && io.mpuValid &&
-      (io.in.bits.uop.cf.pc === io.mpuPC)))
+      (io.in.bits.uop.cf.pc === io.mpuPC) && (io.in.bits.uop.robIdx.value === io.mpuRobIdx)))
   io.out.bits := io.in.bits
   io.out.bits.paddr := s1_paddr
   io.out.bits.miss := false.B
@@ -150,7 +151,7 @@ class StoreUnit_S1(implicit p: Parameters) extends XSModule {
   io.lsq.bits := io.out.bits
   io.lsq.bits.miss := (s1_tlb_miss && !(io.in.bits.uop.cf.instr(6, 0) === "b0101011".U)) ||
     (s1_tlb_miss || ((io.in.bits.uop.cf.instr(6, 0) === "b0101011".U) && (!io.mpuValid ||
-      (io.in.bits.uop.cf.pc =/= io.mpuPC))))//TODO: add mpu cond
+      (io.in.bits.uop.cf.pc =/= io.mpuPC) || (io.in.bits.uop.robIdx.value =/= io.mpuRobIdx))))//TODO: add mpu cond
   io.lsq.bits.data := io.mpuData
 
   // mmio inst with exception will be writebacked immediately
@@ -217,6 +218,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
     val mpuUop = Input(new MicroOp)
     val mpuAddr = Input(UInt(VAddrBits.W))
     val mpuPc = Input(UInt(VAddrBits.W))
+    val mpuRobIdx = Input(UInt(5.W))
     val redirect = Flipped(ValidIO(new Redirect))
     val feedbackSlow = ValidIO(new RSFeedback)
     val tlb = new TlbRequestIO()
@@ -265,6 +267,7 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
   store_s1.io.mpuValid := io.mpuValid
   store_s1.io.mpuData := io.mpuData
   store_s1.io.mpuPC := io.mpuPc
+  store_s1.io.mpuRobIdx := io.mpuRobIdx
   io.lsq <> store_s1.io.lsq
 
   PipelineConnect(store_s1.io.out, store_s2.io.in, true.B, store_s1.io.out.bits.uop.robIdx.needFlush(io.redirect))
@@ -291,6 +294,12 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
   io.flushPc_s2 := flushPc_s2
 
   store_s3.io.stout <> io.stout
+
+  val flush_s3 = dontTouch(Wire(Bool()))
+  val flushPc_s3 = dontTouch(Wire(UInt(VAddrBits.W)))
+  flush_s3 := store_s3.io.stout.bits.uop.robIdx.needFlush(io.redirect)
+  flushPc_s3 := store_s3.io.stout.bits.uop.cf.pc
+
 
   private def printPipeLine(pipeline: LsPipelineBundle, cond: Bool, name: String): Unit = {
     XSDebug(cond,

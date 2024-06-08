@@ -56,12 +56,14 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     scoreboard.io.dpUopIn <> io.dpUopIn.get
     scoreboard.io.commitsIO.commits_pc <> io.commitIn_pc.get
     scoreboard.io.commitsIO.commits_valid <> io.commitIn_valid.get
+    scoreboard.io.commitsIO.commits_robIdx <> io.commitIn_robIdx.get
     scoreboard.io.wbIn.wen(0) := rf2D.io.wbInfoOut.ld_wen
     scoreboard.io.wbIn.wen(1) := rf2D.io.wbInfoOut.fu_wen
     scoreboard.io.wbIn.waddr(0) := rf2D.io.wbInfoOut.ld_waddr
     scoreboard.io.wbIn.waddr(1) := rf2D.io.wbInfoOut.fu_waddr
     scoreboard.io.wbIn.woffset(0) := rf2D.io.wbInfoOut.ld_woffset
     scoreboard.io.wbIn.woffset(1) := 3.U
+    scoreboard.io.flushIn.redirect <> io.redirectIn
 
     rf2D.io.ldIn.wdata_in := scoreboard.io.ldOut.data_out
     rf2D.io.ldIn.waddr_in := scoreboard.io.ldOut.addr_out
@@ -76,6 +78,7 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     io.mpuOut_addr.get := scoreboard.io.stIO.saddr_out
     io.mpuOut_uop.get <> uopReg
     io.mpuOut_pc.get := scoreboard.io.stIO.pc_out
+    io.mpuOut_robIdx.get := scoreboard.io.stIO.robIdx_out
 
     scoreboard.io.stIO.fire := io.fire.get
 

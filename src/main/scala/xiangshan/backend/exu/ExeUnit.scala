@@ -107,10 +107,12 @@ class ExeUnit(config: ExuConfig)(implicit p: Parameters) extends Exu(config) {
     mpuout_uop.get <> matuModules.head.io.mpuOut_uop.get
     mpuout_valid.get := matuModules.head.io.mpuOut_valid.get
     mpuout_pc.get := matuModules.head.io.mpuOut_pc.get
+    mpuout_robidx.get := matuModules.head.io.mpuOut_robIdx.get
     matuModules.head.io.dpIn.get <> dpio.get
     matuModules.head.io.dpUopIn.get <>dp_uop_in.get
     matuModules.head.io.commitIn_pc.get <> commitio_pc.get
     matuModules.head.io.commitIn_valid.get <> commitio_valid.get
+    matuModules.head.io.commitIn_robIdx.get <> commitio_robidx.get
     matuModules.head.io.fire.get <> fire.get
     matuModules.head.io.ldIn_flush_s0.get <> ldin_flush_s0.get
     matuModules.head.io.ldIn_flush_s1.get <> ldin_flush_s1.get

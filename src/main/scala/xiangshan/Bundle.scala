@@ -367,6 +367,7 @@ class RobDispatchData(implicit p: Parameters) extends XSBundle {
 class RobCommitInfo(implicit p: Parameters) extends RobDispatchData {
   // these should be optimized for synthesis verilog
   val pc = UInt(VAddrBits.W)
+  val robIdx = new RobPtr
 
   def connectDispatchData(data: RobDispatchData) {
     ldest := data.ldest

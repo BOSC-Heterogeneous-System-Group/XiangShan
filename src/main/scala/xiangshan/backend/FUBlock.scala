@@ -26,6 +26,7 @@ import xiangshan._
 import xiangshan.backend.exu._
 import xiangshan.backend.fu.CSRFileIO
 import xiangshan.backend.fu.fpu.FMAMidResultIO
+import xiangshan.backend.rob._
 
 class WakeUpBundle(numFast: Int, numSlow: Int)(implicit p: Parameters) extends XSBundle {
   val fastUops = Vec(numFast, Flipped(ValidIO(new MicroOp)))
@@ -84,12 +85,14 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val mpuOut_uop = if (numMatu > 0) Some(Output(new MicroOp)) else None
     val mpuOut_addr = if (numMatu > 0) Some(Output(UInt(VAddrBits.W))) else None
     val mpuOut_pc = if (numMatu > 0) Some(Output(UInt(VAddrBits.W))) else None
+    val mpuOut_robIdx = if (numMatu > 0) Some(Output(UInt(5.W))) else None
     // to std
     val stIn_data = if (numMatu > 0) Some(Input(UInt(XLEN.W))) else None
     val stIn_valid = if (numMatu > 0) Some(Input(Bool())) else None
     // from rob
     val commitsIn_pc = if (numMatu > 0) Some(Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
     val commitsIn_valid = if(numMatu > 0) Some(Vec(CommitWidth, Input(Bool()))) else None
+    val commitsIn_robIdx = if(numMatu > 0) Some(Vec(CommitWidth, Input(new RobPtr))) else None
     // misc
     val extra = new FUBlockExtraIO(configs)
     val fmaMid = if (numFma > 0) Some(Vec(numFma, new FMAMidResultIO)) else None
@@ -206,6 +209,11 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     io.commitsIn_valid.get <> exeUnits.map(_.commitio_valid).filter(_.isDefined).map(_.get).flatten
   }
 
+  if (io.commitsIn_robIdx.isDefined) {
+    io.commitsIn_robIdx.get <> exeUnits.map(_.commitio_robidx).filter(_.isDefined).map(_.get).flatten
+  }
+
+
   if (io.mpuOut_data.isDefined) {
     val filteredPort = exeUnits.map(_.mpuout_data).filter(_.isDefined).map(_.get)
     if (filteredPort.nonEmpty) {
@@ -228,6 +236,13 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val filteredPort = exeUnits.map(_.mpuout_pc).filter(_.isDefined).map(_.get)
     if (filteredPort.nonEmpty) {
       io.mpuOut_pc.get := filteredPort.head
+    }
+  }
+
+  if (io.mpuOut_robIdx.isDefined) {
+    val filteredPort = exeUnits.map(_.mpuout_robidx).filter(_.isDefined).map(_.get)
+    if (filteredPort.nonEmpty) {
+      io.mpuOut_robIdx.get := filteredPort.head
     }
   }
 

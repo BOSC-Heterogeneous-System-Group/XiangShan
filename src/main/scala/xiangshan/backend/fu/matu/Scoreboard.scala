@@ -9,6 +9,7 @@ import utils._
 import xiangshan.{MicroOp, _}
 import xiangshan.backend.exu.ExuParameters
 import xiangshan.backend.fu._
+import xiangshan.backend.rob._
 
 class dispatch_in(implicit p: Parameters) extends XSBundle {
   val uop_in = Input(Vec(2 * dpParams.IntDqDeqWidth, new MicroOp))
@@ -41,6 +42,7 @@ class store_io(implicit p: Parameters) extends XSBundle {
   val store_flag = Output(Bool())
   val saddr_out = Output(UInt(VAddrBits.W))
   val pc_out = Output(UInt(VAddrBits.W))
+  val robIdx_out = Output(UInt(5.W))
 }
 
 class fu_io(implicit p: Parameters) extends XSBundle {
@@ -54,6 +56,7 @@ class fu_io(implicit p: Parameters) extends XSBundle {
 
 class commits_scb_io(implicit p: Parameters) extends XSBundle {
   val commits_pc = Input(Vec(CommitWidth,  UInt(VAddrBits.W)))
+  val commits_robIdx = Input(Vec(CommitWidth, new RobPtr))
   val commits_valid = Input(Vec(CommitWidth, Bool()))
 }
 
@@ -83,9 +86,11 @@ class flush_in(implicit p: Parameters) extends XSBundle {
   val mpu_flush   = Input(Vec(2, Bool()))
   val mpu_flushPc = Input(Vec(2, UInt(VAddrBits.W)))
 
+  val redirect = Flipped(ValidIO(new Redirect))
+
 }
 
-class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter {
+class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter with HasCircularQueuePtrHelper {
   val io = IO(new Bundle {
     val ldIn = new load_in()
     val rsIn = new rs_in()
@@ -121,7 +126,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val rd_w = Wire(Vec(RenameWidth, UInt(3.W)))
   val rd_offset_w = Wire(Vec(RenameWidth, UInt(2.W))) // for load
   val pc_w = Wire(Vec(RenameWidth, UInt(VAddrBits.W)))
-  val robIdx_w = Wire(Vec(RenameWidth, UInt(5.W)))
+  val robIdx_w = Wire(Vec(RenameWidth, new RobPtr))
   val dp_valid_w = Wire(Vec(RenameWidth, Bool()))
 
 
@@ -134,7 +139,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     rd_w(i) := io.dpUopIn(i).bits.cf.instr(9, 7)
     rd_offset_w(i) := io.dpUopIn(i).bits.cf.instr(11, 10)
     pc_w(i) := io.dpUopIn(i).bits.cf.pc
-    robIdx_w(i) := io.dpUopIn(i).bits.robIdx.value
+    robIdx_w(i) := io.dpUopIn(i).bits.robIdx
     dp_valid_w(i) := io.dpUopIn(i).valid && io.dpUopIn(i).bits.cf.instr(6, 0) === "b0101011".U
   }
 
@@ -222,24 +227,25 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val rd_value_array = dontTouch(Reg(Vec(32, UInt(XLEN.W))))
   val rd_offset_array = dontTouch(Reg(Vec(32, UInt(2.W))))
   val pc_array = dontTouch(Reg(Vec(32, UInt(VAddrBits.W))))
-  val robIdx_array = dontTouch(Reg(Vec(32, UInt(4.W))))
+  val robIdx_array = dontTouch(Reg(Vec(32, new RobPtr)))
   val cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
   val time_out_cnt_array = dontTouch(RegInit(VecInit(Seq.fill(32)(0.U(10.W)))))
   val next_cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
   val saddr_array = dontTouch(Reg(Vec(32, UInt(VAddrBits.W))))
 
   val flush_w = dontTouch(Wire(Vec(32, Bool())))
+  val first_flush_w = dontTouch(Wire(Vec(32, Bool())))
 
   for (i <- 0 until 32) {
-    for (j <- 0 until 2) {
-      flush_w(i) := (io.flushIn.st_flush_s0(j) & (io.flushIn.st_flushPc_s0(j) === pc_array(i)) & (state_array(i) === s_wait)) |
-                    (io.flushIn.st_flush_s1(j) & (io.flushIn.st_flushPc_s1(j) === pc_array(i)) & (state_array(i) === s_wait)) |
-                    (io.flushIn.st_flush_s2(j) & (io.flushIn.st_flushPc_s2(j) === pc_array(i)) & (state_array(i) === s_wait)) |
-                    (io.flushIn.ld_flush_s0(j) & (io.flushIn.ld_flushPc_s0(j) === pc_array(i)) & (state_array(i) === s_wait)) |
-                    (io.flushIn.ld_flush_s1(j) & (io.flushIn.ld_flushPc_s1(j) === pc_array(i)) & (state_array(i) === s_wait)) |
-                    (io.flushIn.ld_flush_s2(j) & (io.flushIn.ld_flushPc_s2(j) === pc_array(i)) & (state_array(i) === s_wait)) |
-                    (  io.flushIn.mpu_flush(j) &   (io.flushIn.mpu_flushPc(j) === pc_array(i)) & (state_array(i) === s_wait))
+    flush_w(i) := robIdx_array(i).needFlush(io.flushIn.redirect) && (state_array(i) === s_wait)
+  }
+
+  for (i <- 0 until 32) {
+    val uflush_w = dontTouch(Wire(Vec(32, Bool())))
+    for (j <- 0 until 32) {
+     uflush_w(j) := flush_w(i) && ((isAfter(robIdx_array(j), robIdx_array(i)) || !flush_w(j)) || (i.U === j.U))
     }
+    first_flush_w(i) := uflush_w.asUInt.andR
   }
 
   time_out_cnt_array(0) := Mux(state_array(0)===s_wait && state_array(31)=/=s_wait, time_out_cnt_array(0)+1.U, 0.U)
@@ -257,9 +263,9 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val next_writeCnt_redirect = Wire(UInt(5.W))
   val next_writePtr_redirect = Wire(UInt(6.W))
   val readPtr = RegInit(0.U(6.W))
-  next_writeCnt_redirect := PriorityEncoder(flush_w.asUInt)
+  next_writeCnt_redirect := PriorityEncoder(first_flush_w.asUInt)
   next_writePtr_redirect := Cat(writePtr(5), next_writeCnt_redirect)
-  next_writePtr := Mux(flush_w.asUInt.orR, next_writePtr_redirect, writePtr + PopCount(dp_valid_w))
+  next_writePtr := Mux(flush_w.asUInt.orR, next_writePtr_redirect + PopCount(dp_valid_w), writePtr + PopCount(dp_valid_w))
   writePtr := next_writePtr
 
   val enq_offset = dontTouch(Wire(Vec(RenameWidth, UInt(6.W))))
@@ -324,10 +330,11 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    */
   for (i <- 0 until 32) {
     val commit_flag = Seq.tabulate(CommitWidth)(j =>
-      state_array(i) === s_wait && io.commitsIO.commits_valid(j) && io.commitsIO.commits_pc(j) === pc_array(i)
+      state_array(i) === s_wait && io.commitsIO.commits_valid(j) && (io.commitsIO.commits_pc(j) === pc_array(i)) &&
+        (io.commitsIO.commits_robIdx(j).value === robIdx_array(i).value) && (io.commitsIO.commits_robIdx(j).flag === robIdx_array(i).flag)
     )
     when(state_array(i) === s_wait) {
-      next_state_array(i) := Mux(time_out_cnt_array(i) >= 256.U, s_retire, Mux(flush_w.asUInt.orR && (next_writeCnt_redirect <= cnt_array(i)), s_idle, Mux(commit_flag.reduce(_||_), s_commit, s_wait)))
+      next_state_array(i) := Mux(time_out_cnt_array(i) >= 256.U, s_retire, Mux(flush_w.asUInt.orR && (cnt_array(next_writeCnt_redirect) <= cnt_array(i)), s_idle, Mux(commit_flag.reduce(_||_), s_commit, s_wait)))
     }
   }
 
@@ -463,6 +470,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   io.stIO.saddr_out := saddr_array(PriorityEncoder(st_ready_vec.asUInt))
   io.stIO.store_flag := st_ready_vec.asUInt.orR
   io.stIO.pc_out := pc_array(PriorityEncoder(st_ready_vec.asUInt))
+  io.stIO.robIdx_out := robIdx_array(PriorityEncoder(st_ready_vec.asUInt)).value
 
   /** load instr WAW
    * Handle write after write hazard

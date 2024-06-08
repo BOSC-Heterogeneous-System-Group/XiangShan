@@ -85,6 +85,7 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
     val mpuAddr = Input(UInt(VAddrBits.W))
     val mpuUop = Input(new MicroOp)
     val mpuPc = Input(UInt(VAddrBits.W))
+    val mpuRobIdx = Input(UInt(5.W))
     val fire = Output(Bool())
     // out
     val writeback = Vec(exuParameters.LsExuCnt + exuParameters.StuCnt, DecoupledIO(new ExuOutput))
@@ -191,6 +192,8 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
   storeUnits(1).io.mpuAddr := io.mpuAddr
   storeUnits(0).io.mpuPc := io.mpuPc
   storeUnits(1).io.mpuPc := io.mpuPc
+  storeUnits(0).io.mpuRobIdx := io.mpuRobIdx
+  storeUnits(1).io.mpuRobIdx := io.mpuRobIdx
 
 
   io.stout_flush_s0(0) := storeUnits(0).io.flush_s0

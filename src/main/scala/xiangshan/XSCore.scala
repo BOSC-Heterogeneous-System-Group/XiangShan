@@ -290,6 +290,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   memBlock.io.mpuAddr <> exuBlocks.head.io.saddr
   memBlock.io.mpuUop <> exuBlocks.head.io.suop
   memBlock.io.mpuPc <> exuBlocks.head.io.spc
+  memBlock.io.mpuRobIdx <> exuBlocks.head.io.srobIdx
   exuBlocks.head.io.fire := memBlock.io.fire
 
 
@@ -360,6 +361,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   ctrlBlock.io.sqCancelCnt := memBlock.io.sqCancelCnt
   ctrlBlock.io.commits_pc <> exuBlocks(0).io.commitsIn_pc
   ctrlBlock.io.commits_valid <> exuBlocks(0).io.commitsIn_valid
+  ctrlBlock.io.commits_robIdx <> exuBlocks(0).io.commitsIn_robIdx
 
   exuBlocks(0).io.scheExtra.fpRfReadIn.get <> exuBlocks(1).io.scheExtra.fpRfReadOut.get
   exuBlocks(0).io.scheExtra.fpStateReadIn.get <> exuBlocks(1).io.scheExtra.fpStateReadOut.get

@@ -32,6 +32,7 @@ import xiangshan.mem.mdp.{LFST, SSIT, WaitTable}
 import xiangshan.ExceptionNO._
 import xiangshan.backend.exu.ExuConfig
 import xiangshan.mem.{LsqEnqCtrl, LsqEnqIO}
+import xiangshan.backend.rob._
 
 class CtrlToFtqIO(implicit p: Parameters) extends XSBundle {
   def numRedirect = exuParameters.JmpCnt + exuParameters.AluCnt
@@ -205,6 +206,8 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     val ld_pc_read = Vec(exuParameters.LduCnt, Flipped(new FtqRead(UInt(VAddrBits.W))))
     val commits_pc = Vec(CommitWidth, Output(UInt(VAddrBits.W)))
     val commits_valid = Vec(CommitWidth, Output(Bool()))
+    val commits_robIdx = Vec(CommitWidth, Output(new RobPtr))
+    val mpu_redirect = ValidIO(new Redirect)
     // from int block
     val exuRedirect = Vec(exuParameters.AluCnt + exuParameters.JmpCnt, Flipped(ValidIO(new ExuOutput)))
     val stIn = Vec(exuParameters.StuCnt, Flipped(ValidIO(new ExuInput)))
@@ -270,6 +273,7 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
   for (i <- 0 until CommitWidth) {
     io.commits_pc(i) := rob.io.commits.info(i).pc
     io.commits_valid(i) := rob.io.commits.commitValid(i)
+    io.commits_robIdx(i) := rob.io.commits.info(i).robIdx
   }
 
   pcMem.io.wen.head   := RegNext(io.frontend.fromFtq.pc_mem_wen)
@@ -457,6 +461,8 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
   intDq.io.redirect <> redirectForExu
   fpDq.io.redirect <> redirectForExu
   lsDq.io.redirect <> redirectForExu
+
+  io.mpu_redirect <> redirectForExu
 
   val dpqOut = intDq.io.deq ++ lsDq.io.deq ++ fpDq.io.deq
   io.dispatch <> dpqOut

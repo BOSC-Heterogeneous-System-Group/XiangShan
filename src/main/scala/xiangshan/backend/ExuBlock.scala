@@ -24,6 +24,7 @@ import utils._
 import xiangshan._
 import xiangshan.backend.exu._
 import xiangshan.backend.fu._
+import xiangshan.backend.rob._
 
 class ExuBlock(
                 val configs: Seq[(ExuConfig, Int, Seq[ExuConfig], Seq[ExuConfig])],
@@ -100,11 +101,13 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val saddr = Output(UInt(VAddrBits.W))
     val suop = Output(new MicroOp)
     val spc = Output(UInt(VAddrBits.W))
+    val srobIdx = Output(UInt(5.W))
     // to std
     val stIn = Flipped(ValidIO(UInt(XLEN.W)))
     // from rob
     val commitsIn_pc = Vec(CommitWidth, Input(UInt(VAddrBits.W)))
     val commitsIn_valid = Vec(CommitWidth, Input(Bool()))
+    val commitsIn_robIdx = Vec(CommitWidth, Input(new RobPtr))
     // extra
     val scheExtra = scheduler.io.extra.cloneType
     val fuExtra = fuBlock.io.extra.cloneType
@@ -200,6 +203,10 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     fuBlock.io.commitsIn_valid.get <> io.commitsIn_valid
   }
 
+  if (fuBlock.io.commitsIn_robIdx.isDefined) {
+    fuBlock.io.commitsIn_robIdx.get <> io.commitsIn_robIdx
+  }
+
   if (fuBlock.io.mpuOut_data.isDefined) {
     io.stOut.bits := fuBlock.io.mpuOut_data.get
   }
@@ -226,6 +233,10 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
 
   if (fuBlock.io.mpuOut_pc.isDefined) {
     io.spc := fuBlock.io.mpuOut_pc.get
+  }
+
+  if (fuBlock.io.mpuOut_robIdx.isDefined) {
+    io.srobIdx := fuBlock.io.mpuOut_robIdx.get
   }
 
   if (fuBlock.io.fire.isDefined) {
