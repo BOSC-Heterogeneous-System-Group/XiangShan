@@ -71,7 +71,6 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     // dispatch ports
     val allocPregs = scheduler.io.allocPregs.cloneType
     val in = scheduler.io.in.cloneType
-    val dpIn = Vec(2*dpParams.IntDqDeqWidth, Flipped(DecoupledIO(new MicroOp)))
     val dpUopIn = Vec(RenameWidth, Flipped(ValidIO(new MicroOp)))
     // issue and wakeup ports
     val issue = if (numOutFu > 0) Some(Vec(numOutFu, DecoupledIO(new ExuInput))) else None
@@ -81,29 +80,12 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val fuWriteback = fuBlock.io.writeback.cloneType
     // from mem
     val ldIn = Vec(2, Flipped(DecoupledIO(new ExuOutput)))
-    val stIn_flush_s0 = Vec(2, Input(Bool()))
-    val stIn_flush_s1 = Vec(2, Input(Bool()))
-    val stIn_flush_s2 = Vec(2, Input(Bool()))
-    val stIn_flushPc_s0 = Vec(2, Input(UInt(VAddrBits.W)))
-    val stIn_flushPc_s1 = Vec(2, Input(UInt(VAddrBits.W)))
-    val stIn_flushPc_s2 = Vec(2, Input(UInt(VAddrBits.W)))
-    val ldIn_flush_s0 = Vec(2, Input(Bool()))
-    val ldIn_flush_s1 = Vec(2, Input(Bool()))
-    val ldIn_flush_s2 = Vec(2, Input(Bool()))
-    val ldIn_flushPc_s0 = Vec(2, Input(UInt(VAddrBits.W)))
-    val ldIn_flushPc_s1 = Vec(2, Input(UInt(VAddrBits.W)))
-    val ldIn_flushPc_s2 = Vec(2, Input(UInt(VAddrBits.W)))
 
-    // from stu
-    val fire = Input(Bool())
     // to mem
     val stOut = ValidIO(UInt(XLEN.W))
-    val saddr = Output(UInt(VAddrBits.W))
     val suop = Output(new MicroOp)
     val spc = Output(UInt(VAddrBits.W))
     val srobIdx = Output(UInt(5.W))
-    // to std
-    val stIn = Flipped(ValidIO(UInt(XLEN.W)))
     // from rob
     val commitsIn_pc = Vec(CommitWidth, Input(UInt(VAddrBits.W)))
     val commitsIn_valid = Vec(CommitWidth, Input(Bool()))
@@ -142,58 +124,6 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     fuBlock.io.ldIn.get <> io.ldIn
   }
 
-  if (fuBlock.io.ldIn_flush_s0.isDefined) {
-    fuBlock.io.ldIn_flush_s0.get <> io.ldIn_flush_s0
-  }
-
-  if (fuBlock.io.ldIn_flush_s1.isDefined) {
-    fuBlock.io.ldIn_flush_s1.get <> io.ldIn_flush_s1
-  }
-
-  if (fuBlock.io.ldIn_flush_s2.isDefined) {
-    fuBlock.io.ldIn_flush_s2.get <> io.ldIn_flush_s2
-  }
-
-  if (fuBlock.io.ldIn_flushPc_s0.isDefined) {
-    fuBlock.io.ldIn_flushPc_s0.get <> io.ldIn_flushPc_s0
-  }
-
-  if (fuBlock.io.ldIn_flushPc_s1.isDefined) {
-    fuBlock.io.ldIn_flushPc_s1.get <> io.ldIn_flushPc_s1
-  }
-
-  if (fuBlock.io.ldIn_flushPc_s2.isDefined) {
-    fuBlock.io.ldIn_flushPc_s2.get <> io.ldIn_flushPc_s2
-  }
-
-  if (fuBlock.io.stIn_flush_s0.isDefined) {
-    fuBlock.io.stIn_flush_s0.get <> io.stIn_flush_s0
-  }
-
-  if (fuBlock.io.stIn_flush_s1.isDefined) {
-    fuBlock.io.stIn_flush_s1.get <> io.stIn_flush_s1
-  }
-
-  if (fuBlock.io.stIn_flush_s2.isDefined) {
-    fuBlock.io.stIn_flush_s2.get <> io.stIn_flush_s2
-  }
-
-
-  if (fuBlock.io.stIn_flushPc_s0.isDefined) {
-    fuBlock.io.stIn_flushPc_s0.get <> io.stIn_flushPc_s0
-  }
-
-  if (fuBlock.io.stIn_flushPc_s1.isDefined) {
-    fuBlock.io.stIn_flushPc_s1.get <> io.stIn_flushPc_s1
-  }
-
-  if (fuBlock.io.stIn_flushPc_s2.isDefined) {
-    fuBlock.io.stIn_flushPc_s2.get <> io.stIn_flushPc_s2
-  }
-
-  if (fuBlock.io.dpIn.isDefined) {
-    fuBlock.io.dpIn.get <> io.dpIn
-  }
 
   if (fuBlock.io.commitsIn_pc.isDefined) {
     fuBlock.io.commitsIn_pc.get <> io.commitsIn_pc
@@ -215,17 +145,6 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     io.stOut.valid := fuBlock.io.mpuOut_valid.get
   }
 
-  if (fuBlock.io.stIn_data.isDefined) {
-    fuBlock.io.stIn_data.get := io.stIn.bits
-  }
-
-  if (fuBlock.io.stIn_valid.isDefined) {
-    fuBlock.io.stIn_valid.get := io.stIn.valid
-  }
-
-  if (fuBlock.io.mpuOut_addr.isDefined) {
-    io.saddr := fuBlock.io.mpuOut_addr.get
-  }
 
   if (fuBlock.io.mpuOut_uop.isDefined) {
     io.suop <> fuBlock.io.mpuOut_uop.get
@@ -239,9 +158,6 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     io.srobIdx := fuBlock.io.mpuOut_robIdx.get
   }
 
-  if (fuBlock.io.fire.isDefined) {
-    fuBlock.io.fire.get := io.fire
-  }
 
   if (fuBlock.io.dpUopIn.isDefined) {
     fuBlock.io.dpUopIn.get <> io.dpUopIn

@@ -196,7 +196,6 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     // to exu blocks
     val allocPregs = Vec(RenameWidth, Output(new ResetPregStateReq))
     val dispatch = Vec(3*dpParams.IntDqDeqWidth, DecoupledIO(new MicroOp))
-    val dispatch2mpu = Vec(2*dpParams.IntDqDeqWidth, DecoupledIO(new MicroOp))
     val dpOut = Vec(RenameWidth, ValidIO(new MicroOp))
     val rsReady = Vec(outer.dispatch2.map(_.module.io.out.length).sum, Input(Bool()))
     val enqLsq = Flipped(new LsqEnqIO)
@@ -207,7 +206,6 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     val commits_pc = Vec(CommitWidth, Output(UInt(VAddrBits.W)))
     val commits_valid = Vec(CommitWidth, Output(Bool()))
     val commits_robIdx = Vec(CommitWidth, Output(new RobPtr))
-    val mpu_redirect = ValidIO(new Redirect)
     // from int block
     val exuRedirect = Vec(exuParameters.AluCnt + exuParameters.JmpCnt, Flipped(ValidIO(new ExuOutput)))
     val stIn = Vec(exuParameters.StuCnt, Flipped(ValidIO(new ExuInput)))
@@ -220,8 +218,6 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
       val exception = ValidIO(new ExceptionInfo)
       // to mem block
       val lsq = new RobLsqIO
-      // to MPU
-      val deqPtrVec_v = Vec(CommitWidth, Output(UInt(5.W)))
     }
     val csrCtrl = Input(new CustomCSRCtrlIO)
     val perfInfo = Output(new Bundle{
@@ -462,13 +458,9 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
   fpDq.io.redirect <> redirectForExu
   lsDq.io.redirect <> redirectForExu
 
-  io.mpu_redirect <> redirectForExu
-
   val dpqOut = intDq.io.deq ++ lsDq.io.deq ++ fpDq.io.deq
   io.dispatch <> dpqOut
 
-  val dpqOut2mpu = intDq.io.deq ++ lsDq.io.deq
-  io.dispatch2mpu <> dpqOut2mpu
 
   for (dp2 <- outer.dispatch2.map(_.module.io)) {
     dp2.redirect := redirectForExu
@@ -537,9 +529,6 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
 
   // rob to mem block
   io.robio.lsq <> rob.io.lsq
-
-  // rob to MPU
-  io.robio.deqPtrVec_v := rob.io.deqPtrVec_v
 
   io.perfInfo.ctrlInfo.robFull := RegNext(rob.io.robFull)
   io.perfInfo.ctrlInfo.intdqFull := RegNext(intDq.io.dqFull)

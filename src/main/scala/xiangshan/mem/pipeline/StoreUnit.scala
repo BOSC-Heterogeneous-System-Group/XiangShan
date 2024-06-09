@@ -30,9 +30,6 @@ import xiangshan.cache.mmu.{TlbCmd, TlbReq, TlbRequestIO, TlbResp}
 class StoreUnit_S0(implicit p: Parameters) extends XSModule {
   val io = IO(new Bundle() {
     val in = Flipped(Decoupled(new ExuInput))
-    val mpuValid = Input(Bool())
-    val mpuUop = Input(new MicroOp)
-    val mpuAddr = Input(UInt(VAddrBits.W))
     val rsIdx = Input(UInt(log2Up(IssQueSize).W))
     val isFirstIssue = Input(Bool())
     val out = Decoupled(new LsPipelineBundle)
@@ -216,7 +213,6 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
     val mpuValid = Input(Bool())
     val mpuData = Input(UInt(XLEN.W))
     val mpuUop = Input(new MicroOp)
-    val mpuAddr = Input(UInt(VAddrBits.W))
     val mpuPc = Input(UInt(VAddrBits.W))
     val mpuRobIdx = Input(UInt(5.W))
     val redirect = Flipped(ValidIO(new Redirect))
@@ -230,12 +226,6 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
     val stout = DecoupledIO(new ExuOutput) // writeback store
     // store mask, send to sq in store_s0
     val storeMaskOut = Valid(new StoreMaskBundle)
-    val flush_s0 = Output(Bool())
-    val flushPc_s0 = Output(UInt(VAddrBits.W))
-    val flush_s1 = Output(Bool())
-    val flushPc_s1= Output(UInt(VAddrBits.W))
-    val flush_s2 = Output(Bool())
-    val flushPc_s2 = Output(UInt(VAddrBits.W))
   })
 
   val store_s0 = Module(new StoreUnit_S0)
@@ -244,9 +234,6 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
   val store_s3 = Module(new StoreUnit_S3)
 
   store_s0.io.in <> io.stin
-  store_s0.io.mpuValid := io.mpuValid
-  store_s0.io.mpuUop <> io.mpuUop
-  store_s0.io.mpuAddr := io.mpuAddr
   store_s0.io.dtlbReq <> io.tlb.req
   io.tlb.req_kill := false.B
   store_s0.io.rsIdx := io.rsIdx
@@ -257,10 +244,6 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
   io.storeMaskOut.bits.sqIdx := store_s0.io.out.bits.uop.sqIdx
 
   PipelineConnect(store_s0.io.out, store_s1.io.in, true.B, store_s0.io.out.bits.uop.robIdx.needFlush(io.redirect))
-  val flush_s0 = dontTouch(Wire(Bool()))
-  flush_s0 := store_s0.io.out.bits.uop.robIdx.needFlush(io.redirect)
-  io.flush_s0 := flush_s0
-  io.flushPc_s0 := store_s0.io.out.bits.uop.cf.pc
 
 
   store_s1.io.dtlbResp <> io.tlb.resp
@@ -271,12 +254,6 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
   io.lsq <> store_s1.io.lsq
 
   PipelineConnect(store_s1.io.out, store_s2.io.in, true.B, store_s1.io.out.bits.uop.robIdx.needFlush(io.redirect))
-  val flush_s1 = dontTouch(Wire(Bool()))
-  val flushPc_s1 = dontTouch(Wire(UInt(VAddrBits.W)))
-  flush_s1 := store_s1.io.out.bits.uop.robIdx.needFlush(io.redirect)
-  flushPc_s1 := store_s1.io.out.bits.uop.cf.pc
-  io.flush_s1 := flush_s1
-  io.flushPc_s1 := flushPc_s1
 
   // feedback tlb miss to RS in store_s2
   io.feedbackSlow.bits := RegNext(store_s1.io.rsFeedback.bits)
@@ -286,19 +263,8 @@ class StoreUnit(implicit p: Parameters) extends XSModule {
   store_s2.io.static_pm := RegNext(io.tlb.resp.bits.static_pm)
   io.lsq_replenish := store_s2.io.out.bits // mmio and exception
   PipelineConnect(store_s2.io.out, store_s3.io.in, true.B, store_s2.io.out.bits.uop.robIdx.needFlush(io.redirect))
-  val flush_s2 = dontTouch(Wire(Bool()))
-  val flushPc_s2 = dontTouch(Wire(UInt(VAddrBits.W)))
-  flush_s2 := store_s2.io.out.bits.uop.robIdx.needFlush(io.redirect)
-  flushPc_s2 := store_s2.io.out.bits.uop.cf.pc
-  io.flush_s2 := flush_s2
-  io.flushPc_s2 := flushPc_s2
 
   store_s3.io.stout <> io.stout
-
-  val flush_s3 = dontTouch(Wire(Bool()))
-  val flushPc_s3 = dontTouch(Wire(UInt(VAddrBits.W)))
-  flush_s3 := store_s3.io.stout.bits.uop.robIdx.needFlush(io.redirect)
-  flushPc_s3 := store_s3.io.stout.bits.uop.cf.pc
 
 
   private def printPipeLine(pipeline: LsPipelineBundle, cond: Bool, name: String): Unit = {

@@ -83,7 +83,6 @@ class StoreQueue(implicit p: Parameters) extends XSModule
     val sqCancelCnt = Output(UInt(log2Up(StoreQueueSize + 1).W))
     val sqDeq = Output(UInt(2.W))
 
-    val fire = Output(Bool())
   })
 
   println("StoreQueue: size:" + StoreQueueSize)
@@ -591,9 +590,6 @@ class StoreQueue(implicit p: Parameters) extends XSModule
   for (i <- 0 until StorePipelineWidth) {
     isMSD_w(i) := dataBuffer.io.deq(i).bits.isMSD
   }
-
-  io.fire := (isMSD_w(0) && dataBuffer.io.deq(0).valid && io.sbuffer(0).ready) ||
-    (isMSD_w(1) && dataBuffer.io.deq(1).valid && io.sbuffer(1).ready)
 
   // Send data stored in sbufferReqBitsReg to sbuffer
   for (i <- 0 until StorePipelineWidth) {

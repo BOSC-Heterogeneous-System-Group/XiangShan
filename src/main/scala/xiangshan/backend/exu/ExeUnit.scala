@@ -103,40 +103,16 @@ class ExeUnit(config: ExuConfig)(implicit p: Parameters) extends Exu(config) {
   if (matuModules.nonEmpty) {
     matuModules.head.io.ldIn.get <> ldio.get
     mpuout_data.get := matuModules.head.io.mpuOut_data.get
-    mpuout_addr.get := matuModules.head.io.mpuOut_addr.get
     mpuout_uop.get <> matuModules.head.io.mpuOut_uop.get
     mpuout_valid.get := matuModules.head.io.mpuOut_valid.get
     mpuout_pc.get := matuModules.head.io.mpuOut_pc.get
     mpuout_robidx.get := matuModules.head.io.mpuOut_robIdx.get
-    matuModules.head.io.dpIn.get <> dpio.get
     matuModules.head.io.dpUopIn.get <>dp_uop_in.get
     matuModules.head.io.commitIn_pc.get <> commitio_pc.get
     matuModules.head.io.commitIn_valid.get <> commitio_valid.get
     matuModules.head.io.commitIn_robIdx.get <> commitio_robidx.get
-    matuModules.head.io.fire.get <> fire.get
-    matuModules.head.io.ldIn_flush_s0.get <> ldin_flush_s0.get
-    matuModules.head.io.ldIn_flush_s1.get <> ldin_flush_s1.get
-    matuModules.head.io.ldIn_flush_s2.get <> ldin_flush_s2.get
-    matuModules.head.io.ldIn_flushPc_s0.get <> ldin_flushPc_s0.get
-    matuModules.head.io.ldIn_flushPc_s1.get <> ldin_flushPc_s1.get
-    matuModules.head.io.ldIn_flushPc_s2.get <> ldin_flushPc_s2.get
-    matuModules.head.io.stIn_flush_s0.get <> stin_flush_s0.get
-    matuModules.head.io.stIn_flush_s1.get <> stin_flush_s1.get
-    matuModules.head.io.stIn_flush_s2.get <> stin_flush_s2.get
-    matuModules.head.io.stIn_flushPc_s0.get <> stin_flushPc_s0.get
-    matuModules.head.io.stIn_flushPc_s1.get <> stin_flushPc_s1.get
-    matuModules.head.io.stIn_flushPc_s2.get <> stin_flushPc_s2.get
   }
 
-  val stdModules = functionUnits.filter(_.isInstanceOf[Std]).map(_.asInstanceOf[Std])
-  if (stdModules.nonEmpty) {
-    stdModules.head.io.stIn.get.bits := stin_data.get
-    stdModules.head.io.stIn.get.valid := stin_valid.get
-    stdModules.head.io.stuop.get <> stin_uop.get
-    stdModules(1).io.stIn.get.bits := stin_data.get
-    stdModules(1).io.stIn.get.valid := stin_valid.get
-    stdModules(1).io.stuop.get <> stin_uop.get
-  }
 
   if (config.readIntRf) {
     val in = io.fromInt

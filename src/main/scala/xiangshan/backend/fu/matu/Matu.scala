@@ -37,22 +37,10 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     io.ldIn.get(0).ready := true.B
     io.ldIn.get(1).ready := true.B
 
-    for (i <- 0 until 2*dpParams.IntDqDeqWidth) {
-        io.dpIn.get(i).ready := true.B
-    }
 
     val commit_info_r = dontTouch(Reg(Vec(CommitWidth, UInt(VAddrBits.W))))
     commit_info_r <> io.commitIn_pc.get
 
-    val dp_in_uop_w = dontTouch(Wire(Vec(2*dpParams.IntDqDeqWidth, new MicroOp)))
-    val dp_in_valid_w = dontTouch(Wire(Vec(2*dpParams.IntDqDeqWidth, Bool())))
-    for (i <- 0 until 2*dpParams.IntDqDeqWidth) {
-        dp_in_uop_w(i) := io.dpIn.get(i).bits
-        dp_in_valid_w(i) := io.dpIn.get(i).valid
-    }
-
-    scoreboard.io.dpIn.uop_in <> dp_in_uop_w
-    scoreboard.io.dpIn.valid_in <> dp_in_valid_w
     scoreboard.io.dpUopIn <> io.dpUopIn.get
     scoreboard.io.commitsIO.commits_pc <> io.commitIn_pc.get
     scoreboard.io.commitsIO.commits_valid <> io.commitIn_valid.get
@@ -75,12 +63,9 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
 
     io.mpuOut_data.get := rf2D.io.stIO.rdata_out
     io.mpuOut_valid.get := scoreboard.io.stIO.store_flag
-    io.mpuOut_addr.get := scoreboard.io.stIO.saddr_out
     io.mpuOut_uop.get <> uopReg
     io.mpuOut_pc.get := scoreboard.io.stIO.pc_out
     io.mpuOut_robIdx.get := scoreboard.io.stIO.robIdx_out
-
-    scoreboard.io.stIO.fire := io.fire.get
 
     val ex_valid_w = dontTouch(Wire(Bool()))
     val ex_OpType_w = dontTouch(Wire(FuOpType()))
@@ -100,59 +85,6 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     rf2D.io.fuIO.raddr_in(0) := rs1_w
     rf2D.io.fuIO.raddr_in(1) := rs2_w
     rf2D.io.fuIO.waddr_in := rd_r
-
-    val mpu_kill_w = dontTouch(uop.robIdx.needFlush(io.redirectIn))
-    val mpu_kill_pc_w = dontTouch(Wire(UInt(VAddrBits.W)))
-    mpu_kill_pc_w := uop.cf.pc
-
-    val ld_kill_w_s0 = dontTouch(Wire(Vec(2, Bool())))
-    val ld_kill_w_s1 = dontTouch(Wire(Vec(2, Bool())))
-    val ld_kill_w_s2 = dontTouch(Wire(Vec(2, Bool())))
-    ld_kill_w_s0 <> io.ldIn_flush_s0.get
-    ld_kill_w_s1 <> io.ldIn_flush_s1.get
-    ld_kill_w_s2 <> io.ldIn_flush_s2.get
-
-    val ld_kill_pc_w_s0 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
-    val ld_kill_pc_w_s1 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
-    val ld_kill_pc_w_s2 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
-    ld_kill_pc_w_s0 <> io.ldIn_flushPc_s0.get
-    ld_kill_pc_w_s1 <> io.ldIn_flushPc_s1.get
-    ld_kill_pc_w_s2 <> io.ldIn_flushPc_s2.get
-
-    val st_kill_w_s0 = dontTouch(Wire(Vec(2, Bool())))
-    val st_kill_w_s1 = dontTouch(Wire(Vec(2, Bool())))
-    val st_kill_w_s2 = dontTouch(Wire(Vec(2, Bool())))
-    st_kill_w_s0 <> io.stIn_flush_s0.get
-    st_kill_w_s1 <> io.stIn_flush_s1.get
-    st_kill_w_s2 <> io.stIn_flush_s2.get
-
-    val st_kill_pc_w_s0 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
-    val st_kill_pc_w_s1 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
-    val st_kill_pc_w_s2 = dontTouch(Wire(Vec(2, UInt(VAddrBits.W))))
-    st_kill_pc_w_s0 <> io.stIn_flushPc_s0.get
-    st_kill_pc_w_s1 <> io.stIn_flushPc_s1.get
-    st_kill_pc_w_s2 <> io.stIn_flushPc_s2.get
-
-    scoreboard.io.flushIn.st_flush_s0 <> st_kill_w_s0
-    scoreboard.io.flushIn.st_flush_s1 <> st_kill_w_s1
-    scoreboard.io.flushIn.st_flush_s2 <> st_kill_w_s2
-
-    scoreboard.io.flushIn.st_flushPc_s0 <> st_kill_pc_w_s0
-    scoreboard.io.flushIn.st_flushPc_s1 <> st_kill_pc_w_s1
-    scoreboard.io.flushIn.st_flushPc_s2 <> st_kill_pc_w_s2
-
-    scoreboard.io.flushIn.ld_flush_s0 <> ld_kill_w_s0
-    scoreboard.io.flushIn.ld_flush_s1 <> ld_kill_w_s1
-    scoreboard.io.flushIn.ld_flush_s2 <> ld_kill_w_s2
-
-    scoreboard.io.flushIn.ld_flushPc_s0 <> ld_kill_pc_w_s0
-    scoreboard.io.flushIn.ld_flushPc_s1 <> ld_kill_pc_w_s1
-    scoreboard.io.flushIn.ld_flushPc_s2 <> ld_kill_pc_w_s2
-
-    scoreboard.io.flushIn.mpu_flush(0) := mpu_kill_w
-    scoreboard.io.flushIn.mpu_flush(1) := mpu_kill_w
-    scoreboard.io.flushIn.mpu_flushPc(0) := mpu_kill_pc_w
-    scoreboard.io.flushIn.mpu_flushPc(1) := mpu_kill_pc_w
 
     val MPU = Module (new top_R(1, 8, 32, 2, 8, 2, 2))
     //val MADD = Module (new Mtest())
@@ -284,22 +216,6 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     rf2D.io.fuIO.valid_in := MTU.io.valid_out
     rf2D.io.fuIO.wdata_in <> MTU.io.rd_data
     scoreboard.io.fuIO.ready_in := MTU.io.ready_out */
-
-
-
-/*  dataModule.io.xsIO.in.bits.src := io.in.bits.src.take(2)
-    dataModule.io.xsIO.in.bits.OpType := uopReg.ctrl.fuOpType
-
-    io.in.ready := dataModule.io.xsIO.in.ready
-    dataModule.io.xsIO.in.valid := io.in.valid
-    dataModule.io.xsIO.out.ready := io.out.ready
-    io.out.valid := dataModule.io.xsIO.out.valid
-    io.out.bits.uop := uopReg
-    io.out.bits.data := dataModule.io.xsIO.out.bits.data */
-
-    scoreboard.io.rsIn.uop_in <> io.in.bits.uop
-    scoreboard.io.rsIn.valid_in := io.in.valid
-    scoreboard.io.rsIn.src := io.in.bits.src(0)
 
     io.in.ready := io.out.ready
     io.out.valid := io.in.valid

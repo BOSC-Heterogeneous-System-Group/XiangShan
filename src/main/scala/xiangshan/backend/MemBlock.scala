@@ -82,28 +82,14 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
     val stIssuePtr = Output(new SqPtr())
     val mpuValid = Input(Bool())
     val mpuData = Input(UInt(XLEN.W))
-    val mpuAddr = Input(UInt(VAddrBits.W))
     val mpuUop = Input(new MicroOp)
     val mpuPc = Input(UInt(VAddrBits.W))
     val mpuRobIdx = Input(UInt(5.W))
-    val fire = Output(Bool())
     // out
     val writeback = Vec(exuParameters.LsExuCnt + exuParameters.StuCnt, DecoupledIO(new ExuOutput))
     val s3_delayed_load_error = Vec(exuParameters.LduCnt, Output(Bool()))
     val otherFastWakeup = Vec(exuParameters.LduCnt + 2 * exuParameters.StuCnt, ValidIO(new MicroOp))
     val ldout_dup = Vec(exuParameters.LduCnt, DecoupledIO(new ExuOutput))
-    val ldout_flush_s0 = Vec(exuParameters.LduCnt, Output(Bool()))
-    val ldout_flush_s1 = Vec(exuParameters.LduCnt, Output(Bool()))
-    val ldout_flush_s2 = Vec(exuParameters.LduCnt, Output(Bool()))
-    val ldout_flushPc_s0 = Vec(exuParameters.LduCnt, Output(UInt(VAddrBits.W)))
-    val ldout_flushPc_s1 = Vec(exuParameters.LduCnt, Output(UInt(VAddrBits.W)))
-    val ldout_flushPc_s2 = Vec(exuParameters.LduCnt, Output(UInt(VAddrBits.W)))
-    val stout_flush_s0 = Vec(exuParameters.StuCnt, Output(Bool()))
-    val stout_flush_s1 = Vec(exuParameters.StuCnt, Output(Bool()))
-    val stout_flush_s2 = Vec(exuParameters.StuCnt, Output(Bool()))
-    val stout_flushPc_s0 = Vec(exuParameters.StuCnt, Output(UInt(VAddrBits.W)))
-    val stout_flushPc_s1 = Vec(exuParameters.StuCnt, Output(UInt(VAddrBits.W)))
-    val stout_flushPc_s2 = Vec(exuParameters.StuCnt, Output(UInt(VAddrBits.W)))
     // misc
     val stIn = Vec(exuParameters.StuCnt, ValidIO(new ExuInput))
     val memoryViolation = ValidIO(new Redirect)
@@ -175,39 +161,17 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
   loadUnits.zipWithIndex.map(x => x._1.suggestName("LoadUnit_"+x._2))
   storeUnits.zipWithIndex.map(x => x._1.suggestName("StoreUnit_"+x._2))
 
-  stdExeUnits(0).stin_data.get := io.mpuData
-  stdExeUnits(1).stin_data.get := io.mpuData
-  stdExeUnits(0).stin_valid.get := io.mpuValid
-  stdExeUnits(1).stin_valid.get := false.B
-  stdExeUnits(0).stin_uop.get <> io.mpuUop
-  stdExeUnits(1).stin_uop.get <> io.mpuUop
-
   storeUnits(0).io.mpuValid := io.mpuValid
   storeUnits(1).io.mpuValid := io.mpuValid
   storeUnits(0).io.mpuData := io.mpuData
   storeUnits(1).io.mpuData := io.mpuData
   storeUnits(0).io.mpuUop <> io.mpuUop
   storeUnits(1).io.mpuUop <> io.mpuUop
-  storeUnits(0).io.mpuAddr := io.mpuAddr
-  storeUnits(1).io.mpuAddr := io.mpuAddr
   storeUnits(0).io.mpuPc := io.mpuPc
   storeUnits(1).io.mpuPc := io.mpuPc
   storeUnits(0).io.mpuRobIdx := io.mpuRobIdx
   storeUnits(1).io.mpuRobIdx := io.mpuRobIdx
 
-
-  io.stout_flush_s0(0) := storeUnits(0).io.flush_s0
-  io.stout_flush_s0(1) := storeUnits(1).io.flush_s0
-  io.stout_flush_s1(0) := storeUnits(0).io.flush_s1
-  io.stout_flush_s1(1) := storeUnits(1).io.flush_s1
-  io.stout_flush_s2(0) := storeUnits(0).io.flush_s2
-  io.stout_flush_s2(1) := storeUnits(1).io.flush_s2
-  io.stout_flushPc_s0(0) := storeUnits(0).io.flushPc_s0
-  io.stout_flushPc_s0(1) := storeUnits(1).io.flushPc_s0
-  io.stout_flushPc_s1(0) := storeUnits(0).io.flushPc_s1
-  io.stout_flushPc_s1(1) := storeUnits(1).io.flushPc_s1
-  io.stout_flushPc_s2(0) := storeUnits(0).io.flushPc_s2
-  io.stout_flushPc_s2(1) := storeUnits(1).io.flushPc_s2
 
 
   val atomicsUnit = Module(new AtomicsUnit)
@@ -221,21 +185,6 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
   io.ldout_dup(1) <> ldout_w(1)
   loadUnits(0).io.ldout_dup.ready := io.ldout_dup(0).ready
   loadUnits(1).io.ldout_dup.ready := io.ldout_dup(1).ready
-
-  io.ldout_flush_s0(0) := loadUnits(0).io.flush_s0
-  io.ldout_flush_s0(1) := loadUnits(1).io.flush_s0
-  io.ldout_flush_s1(0) := loadUnits(0).io.flush_s1
-  io.ldout_flush_s1(1) := loadUnits(1).io.flush_s1
-  io.ldout_flush_s2(0) := loadUnits(0).io.flush_s2
-  io.ldout_flush_s2(1) := loadUnits(1).io.flush_s2
-
-
-  io.ldout_flushPc_s0(0) := loadUnits(0).io.flushPc_s0
-  io.ldout_flushPc_s0(1) := loadUnits(1).io.flushPc_s0
-  io.ldout_flushPc_s1(0) := loadUnits(0).io.flushPc_s1
-  io.ldout_flushPc_s1(1) := loadUnits(1).io.flushPc_s1
-  io.ldout_flushPc_s2(0) := loadUnits(0).io.flushPc_s2
-  io.ldout_flushPc_s2(1) := loadUnits(1).io.flushPc_s2
 
 
   // Atom inst comes from sta / std, then its result
@@ -272,7 +221,6 @@ class MemBlockImp(outer: MemBlock) extends LazyModuleImp(outer)
   sbuffer.io.hartId := io.hartId
   atomicsUnit.io.hartId := io.hartId
 
-  io.fire := lsq.io.fire
 
   // dtlb
   val total_tlb_ports = ld_tlb_ports + exuParameters.StuCnt

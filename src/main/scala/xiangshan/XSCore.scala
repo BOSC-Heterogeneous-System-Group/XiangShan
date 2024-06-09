@@ -271,35 +271,13 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
 
   exuBlocks.head.io.ldIn(0) <> memBlock.io.ldout_dup(0)
   exuBlocks.head.io.ldIn(1) <> memBlock.io.ldout_dup(1)
-  exuBlocks.head.io.ldIn_flush_s0 <> memBlock.io.ldout_flush_s0
-  exuBlocks.head.io.ldIn_flush_s1 <> memBlock.io.ldout_flush_s1
-  exuBlocks.head.io.ldIn_flush_s2 <> memBlock.io.ldout_flush_s2
-  exuBlocks.head.io.ldIn_flushPc_s0 <> memBlock.io.ldout_flushPc_s0
-  exuBlocks.head.io.ldIn_flushPc_s1 <> memBlock.io.ldout_flushPc_s1
-  exuBlocks.head.io.ldIn_flushPc_s2 <> memBlock.io.ldout_flushPc_s2
   exuBlocks.head.io.dpUopIn <> ctrlBlock.io.dpOut
 
-  exuBlocks.head.io.stIn_flush_s0 <> memBlock.io.stout_flush_s0
-  exuBlocks.head.io.stIn_flush_s1 <> memBlock.io.stout_flush_s1
-  exuBlocks.head.io.stIn_flush_s2 <> memBlock.io.stout_flush_s2
-  exuBlocks.head.io.stIn_flushPc_s0 <> memBlock.io.stout_flushPc_s0
-  exuBlocks.head.io.stIn_flushPc_s1 <> memBlock.io.stout_flushPc_s1
-  exuBlocks.head.io.stIn_flushPc_s2 <> memBlock.io.stout_flushPc_s2
   memBlock.io.mpuValid <> exuBlocks.head.io.stOut.valid
   memBlock.io.mpuData <> exuBlocks.head.io.stOut.bits
-  memBlock.io.mpuAddr <> exuBlocks.head.io.saddr
   memBlock.io.mpuUop <> exuBlocks.head.io.suop
   memBlock.io.mpuPc <> exuBlocks.head.io.spc
   memBlock.io.mpuRobIdx <> exuBlocks.head.io.srobIdx
-  exuBlocks.head.io.fire := memBlock.io.fire
-
-
-  val mpu_valid_w = Wire(Bool())
-  val mpu_data_w = Wire(UInt(XLEN.W))
-  mpu_valid_w := exuBlocks.head.io.stOut.valid
-  mpu_data_w := exuBlocks.head.io.stOut.bits
-  exuBlocks.head.io.stIn.valid := mpu_valid_w
-  exuBlocks.head.io.stIn.bits := mpu_data_w
 
   io.cpu_halt := ctrlBlock.io.cpu_halt
 
@@ -353,7 +331,6 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   val allFastUop1 = intFastUop1 ++ fpFastUop1
 
   ctrlBlock.io.dispatch <> exuBlocks.flatMap(_.io.in)
-  ctrlBlock.io.dispatch2mpu <> exuBlocks(0).io.dpIn
   ctrlBlock.io.rsReady := exuBlocks.flatMap(_.io.scheExtra.rsReady)
   ctrlBlock.io.enqLsq <> memBlock.io.enqLsq
   ctrlBlock.io.sqDeq := memBlock.io.sqDeq
