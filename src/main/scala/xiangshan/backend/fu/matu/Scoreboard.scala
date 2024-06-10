@@ -11,6 +11,22 @@ import xiangshan.backend.exu.ExuParameters
 import xiangshan.backend.fu._
 import xiangshan.backend.rob._
 
+
+class ScoreboardPtr (implicit p: Parameters) extends CircularQueuePtr[ScoreboardPtr](
+  p => p(XSCoreParamsKey).ScoreboardSize
+) with HasCircularQueuePtrHelper {
+
+}
+
+object ScoreboardPtr {
+  def apply(f: Bool, v: UInt)(implicit p: Parameters): ScoreboardPtr = {
+    val ptr = Wire(new ScoreboardPtr)
+    ptr.flag := f
+    ptr.value := v
+    ptr
+  }
+}
+
 class load_in(implicit p: Parameters) extends XSBundle {
   val data_in = Input(Vec(exuParameters.LduCnt, UInt(XLEN.W)))
   val uop_in = Input(Vec(exuParameters.LduCnt, new MicroOp))
@@ -117,6 +133,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
   val time_out_cnt_array = dontTouch(RegInit(VecInit(Seq.fill(32)(0.U(10.W)))))
   val next_cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
+  val history_ptr_array = dontTouch(RegInit(VecInit(Seq.fill(32)(0.U.asTypeOf(new ScoreboardPtr)))))
 
   val flush_w = dontTouch(Wire(Vec(32, Bool())))
   val first_flush_w = dontTouch(Wire(Vec(32, Bool())))
@@ -143,15 +160,14 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     state_array(i) := next_state_array(i)
   }
 
-  val writePtr = RegInit(0.U(6.W))
-  val next_writePtr = Wire(UInt(6.W))
-  val next_writeCnt_redirect = Wire(UInt(5.W))
-  val next_writePtr_redirect = Wire(UInt(6.W))
-  val readPtr = RegInit(0.U(6.W))
-  next_writeCnt_redirect := PriorityEncoder(first_flush_w.asUInt)
-  next_writePtr_redirect := Cat(writePtr(5), next_writeCnt_redirect)
-  next_writePtr := Mux(flush_w.asUInt.orR, next_writePtr_redirect + PopCount(dp_valid_w), writePtr + PopCount(dp_valid_w))
-  writePtr := next_writePtr
+  val enqPtr = dontTouch(RegInit(0.U.asTypeOf(new ScoreboardPtr)))
+  val next_enqPtr = dontTouch(Wire(new ScoreboardPtr))
+  val next_enqPtr_redirect = dontTouch(Wire(new ScoreboardPtr))
+  val deqPtr = dontTouch(RegInit(0.U.asTypeOf(new ScoreboardPtr)))
+  next_enqPtr_redirect.value := PriorityEncoder(first_flush_w.asUInt)
+  next_enqPtr_redirect.flag := history_ptr_array(PriorityEncoder(first_flush_w.asUInt)).flag
+  next_enqPtr := Mux(flush_w.asUInt.orR, next_enqPtr_redirect + PopCount(dp_valid_w), enqPtr + PopCount(dp_valid_w))
+  enqPtr := next_enqPtr
 
   val enq_offset = dontTouch(Wire(Vec(RenameWidth, UInt(6.W))))
   val offset = (0 until RenameWidth).map(i => PopCount(dp_valid_w.take(i)))
@@ -164,18 +180,19 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * Entry type: 1. OpType  2. rs1 2. rs2 3. rs2_offset 4. rd  5. rd_offset  6. pc  7. robIdx  8. state
    */
   for(i <- 0 until RenameWidth) {
-    when(state_array(writePtr(4, 0) + enq_offset(i)) === s_idle && dp_valid_w(i) === true.B){
-      OpType_array(writePtr(4, 0) + enq_offset(i)) := OpType_w(i)
-      instr_array(writePtr(4, 0) + enq_offset(i)) := instr_w(i)
-      rs1_array(writePtr(4, 0) + enq_offset(i)) := rs1_w(i)
-      rs2_array(writePtr(4, 0) + enq_offset(i)) := rs2_w(i)
-      rs2_offset_array(writePtr(4, 0) + enq_offset(i)) := rs2_offset_w(i)
-      rd_array(writePtr(4, 0) + enq_offset(i)) := rd_w(i)
-      rd_offset_array(writePtr(4, 0) + enq_offset(i)) := rd_offset_w(i)
-      pc_array(writePtr(4, 0) + enq_offset(i)) := pc_w(i)
-      robIdx_array(writePtr(4, 0) + enq_offset(i)) := robIdx_w(i)
-      next_state_array(writePtr(4, 0) + enq_offset(i)) := s_wait
-      cnt_array(writePtr(4, 0) + enq_offset(i)) := next_cnt_array(writePtr(4, 0) + enq_offset(i))
+    when(state_array(enqPtr.value + enq_offset(i)) === s_idle && dp_valid_w(i) === true.B){
+      OpType_array(enqPtr.value + enq_offset(i)) := OpType_w(i)
+      instr_array(enqPtr.value + enq_offset(i)) := instr_w(i)
+      rs1_array(enqPtr.value + enq_offset(i)) := rs1_w(i)
+      rs2_array(enqPtr.value + enq_offset(i)) := rs2_w(i)
+      rs2_offset_array(enqPtr.value + enq_offset(i)) := rs2_offset_w(i)
+      rd_array(enqPtr.value + enq_offset(i)) := rd_w(i)
+      rd_offset_array(enqPtr.value + enq_offset(i)) := rd_offset_w(i)
+      pc_array(enqPtr.value + enq_offset(i)) := pc_w(i)
+      robIdx_array(enqPtr.value + enq_offset(i)) := robIdx_w(i)
+      next_state_array(enqPtr.value + enq_offset(i)) := s_wait
+      cnt_array(enqPtr.value + enq_offset(i)) := next_cnt_array(enqPtr.value + enq_offset(i))
+      history_ptr_array(enqPtr.value + enq_offset(i)) := enqPtr + enq_offset(i)
     }
   }
 
@@ -205,8 +222,9 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     )
     when(state_array(i) === s_wait) {
       next_state_array(i) := Mux(time_out_cnt_array(i) >= 256.U, s_retire,
-                             Mux(flush_w.asUInt.orR && (cnt_array(next_writeCnt_redirect) <= cnt_array(i)), s_idle,
-                               Mux(commit_flag.reduce(_||_), s_commit, s_wait)))
+                             Mux(flush_w.asUInt.orR && (isAfter(history_ptr_array(i), next_enqPtr_redirect) ||
+                             isItself(history_ptr_array(i), next_enqPtr_redirect)) , s_idle,
+                             Mux(commit_flag.reduce(_||_), s_commit, s_wait)))
     }
   }
 
@@ -237,7 +255,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     commitVecUInt(i) := commitVec(i).asUInt
   }
 
-  val selBits = Seq.tabulate(3)(i => Seq.tabulate(32)(j => Mux(j.U >= readPtr(4, 0), true.B, false.B)))
+  val selBits = Seq.tabulate(3)(i => Seq.tabulate(32)(j => Mux(j.U >= deqPtr.value, true.B, false.B)))
   val shiftedIndices = Wire(Vec(3, Vec(32, UInt(5.W))))
   for (i <- 0 until 3) {
     for (j <- 0 until 32) {
@@ -256,7 +274,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
 
   for (i <- 0 until 3) {
     when(commitVec(i).asUInt.orR) {
-      next_state_array(readPtr + PriorityEncoder(real_commitVec(i))) := s_retire
+      next_state_array(deqPtr.value + PriorityEncoder(real_commitVec(i))) := s_retire
     }
   }
 
@@ -271,18 +289,19 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
       rs1MatchVec_1(j) := rd_array(j) === rs1_array(i) &&
                           (state_array(i) === s_wait || state_array(i) === s_commit) &&
                           (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) &&
-                          (state_array(j) === s_retire || state_array(j) === s_idle) && (cnt_array(j) < cnt_array(i))
+                          (state_array(j) === s_retire || state_array(j) === s_idle) &&
+                          isAfter(history_ptr_array(i), history_ptr_array(j))
       rs1MatchVec_2(j) := rd_array(j) === rs1_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) &&
                           (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) &&
-                          (cnt_array(j) < cnt_array(i))
+                          isAfter(history_ptr_array(i), history_ptr_array(j))
       real_rs1MatchVec(j) := ((rd_array(j) === rs1_array(i) &&
                              (state_array(i) === s_wait || state_array(i) === s_commit) &&
                              (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) &&
                              (state_array(j) === s_retire || state_array(j) === s_idle) &&
-                             (cnt_array(j) < cnt_array(i))) === (rd_array(j) === rs1_array(i) &&
+                             isAfter(history_ptr_array(i), history_ptr_array(j))) === (rd_array(j) === rs1_array(i) &&
                              (state_array(i) === s_wait || state_array(i) === s_commit) &&
                              (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest) &&
-                             (cnt_array(j) < cnt_array(i)))) &&
+                             isAfter(history_ptr_array(i), history_ptr_array(j)))) &&
                              (state_array(i) === s_wait || state_array(i) === s_commit)
     }
     rs1_ready_array(i) := Mux(real_rs1MatchVec.asUInt.andR, s_ready, s_unready)
@@ -297,18 +316,19 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                           (state_array(i) === s_wait || state_array(i) === s_commit) &&
                           (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd) &&
                           (state_array(j) === s_retire || state_array(j) === s_idle) &&
-                          (cnt_array(j) < cnt_array(i))
+                          isAfter(history_ptr_array(i), history_ptr_array(j))
       rs2MatchVec_2(j) := rd_array(j) === rs2_array(i) &&
                           (state_array(i) === s_wait || state_array(i) === s_commit) &&
                           (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest || OpType_array(i) ===LSUOpType.sd) &&
-                          (cnt_array(j) < cnt_array(i))
+                          isAfter(history_ptr_array(i), history_ptr_array(j))
       real_rs2MatchVec(j) := ((rd_array(j) === rs2_array(i) &&
                              (state_array(i) === s_wait || state_array(i) === s_commit) &&
                              (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd) &&
-                             (state_array(j) === s_retire || state_array(j) === s_idle) && (cnt_array(j) < cnt_array(i)))
+                             (state_array(j) === s_retire || state_array(j) === s_idle) &&
+                             isAfter(history_ptr_array(i), history_ptr_array(j)))
                              === (rd_array(j) === rs2_array(i) && (state_array(i) === s_wait || state_array(i) === s_commit) &&
                              (OpType_array(i) === MATUOpType.mmul || OpType_array(i) === MATUOpType.mtest || OpType_array(i) === LSUOpType.sd) &&
-                             (cnt_array(j) < cnt_array(i)))) && (state_array(i) === s_wait || state_array(i) === s_commit)
+                             isAfter(history_ptr_array(i), history_ptr_array(j)))) && (state_array(i) === s_wait || state_array(i) === s_commit)
     }
     rs2_ready_array(i) := Mux(real_rs2MatchVec.asUInt.andR, s_ready, s_unready)
   }
@@ -327,14 +347,14 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                          (state_array(i) === s_commit || state_array(i) === s_wait) &&
                          ((OpType_array(j) === LSUOpType.mld && rd_offset_array(i) === rd_offset_array(j)) ||
                          (OpType_array(j) === MATUOpType.mmul ||
-                         OpType_array(j) === MATUOpType.mtest)) && (cnt_array(j) < cnt_array(i))
+                         OpType_array(j) === MATUOpType.mtest)) && isAfter(history_ptr_array(i), history_ptr_array(j))
       m_warMatchVec(j) := (rs1_array(j) === rd_array(i) || rs2_array(j) === rd_array(i)) &&
                           (OpType_array(i) === MATUOpType.mtest || OpType_array(i) === MATUOpType.mmul) &&
                           (state_array(j) === s_wait || state_array(j) === s_commit) &&
                           (state_array(i) === s_commit || state_array(i) === s_wait) &&
                           ((OpType_array(j) === LSUOpType.sd && rd_offset_array(i) === rs2_offset_array(j)) ||
                           (OpType_array(j) === MATUOpType.mmul || OpType_array(j) === MATUOpType.mtest)) &&
-                          (cnt_array(j) < cnt_array(i))
+                          isAfter(history_ptr_array(i), history_ptr_array(j))
     }
     rd_ready_array(i) := Mux(m_wawMatchVec.asUInt.orR || m_warMatchVec.asUInt.orR, s_unready, s_ready)
   }
@@ -347,7 +367,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                       (state_array(i) === s_wait || state_array(i) === s_commit)
     val stMatchVec = dontTouch(Wire(Vec(32, Bool())))
     for (j <- 0 until 32) {
-      stMatchVec(j) := OpType_array(j) === LSUOpType.sd && state_array(j) === s_wait && (cnt_array(j) < cnt_array(i))
+      stMatchVec(j) := OpType_array(j) === LSUOpType.sd && state_array(j) === s_wait && isAfter(history_ptr_array(i), history_ptr_array(j))
     }
     st_ready_vec(i) := rs2_ready_array(i) === s_ready && OpType_array(i) === LSUOpType.sd &&
                        (state_array(i) === s_wait || state_array(i) === s_commit) && !stMatchVec.asUInt.orR
@@ -380,7 +400,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                            ((OpType_array(j) === LSUOpType.mld && rd_offset_array(i) === rd_offset_array(j)) ||
                            (OpType_array(j) === MATUOpType.mmul ||
                            OpType_array(j) === MATUOpType.mtest)) &&
-                           (cnt_array(j) < cnt_array(i))
+                           isAfter(history_ptr_array(i), history_ptr_array(j))
     }
     ld_waw_vec(i) := ld_wawMatchVec.asUInt.orR
   }
@@ -397,7 +417,8 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
                            (state_array(i) === s_commit || state_array(i) === s_wait) &&
                            ((OpType_array(j) === LSUOpType.mld && rd_offset_array(i) === rd_offset_array(j)) ||
                            (OpType_array(j) === MATUOpType.mmul ||
-                           OpType_array(j) === MATUOpType.mtest)) && (cnt_array(j) < cnt_array(i))
+                           OpType_array(j) === MATUOpType.mtest)) &&
+                           isAfter(history_ptr_array(i), history_ptr_array(j))
     }
     ld_war_vec(i) := ld_warMatchVec.asUInt.orR
   }
@@ -418,10 +439,10 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    * state: s_retire -> s_idle
    *
    */
-  when(state_array(readPtr(4, 0)) === s_retire) {
-    next_state_array(readPtr(4, 0)) := s_idle
-    next_cnt_array(readPtr(4, 0)) := cnt_array(readPtr(4, 0)) + 32.U
-    readPtr := readPtr + 1.U
+  when(state_array(deqPtr.value) === s_retire) {
+    next_state_array(deqPtr.value) := s_idle
+    next_cnt_array(deqPtr.value) := cnt_array(deqPtr.value) + 32.U
+    deqPtr := deqPtr + 1.U
   }
 
 }
