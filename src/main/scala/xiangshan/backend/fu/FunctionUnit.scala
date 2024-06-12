@@ -86,6 +86,7 @@ class FunctionUnitIO(val len: Int, cfg: ExuConfig)(implicit p: Parameters) exten
   val mpuOut_valid = if(cfg == MatuExeUnitCfg) Some (Output(Bool())) else None
   val mpuOut_pc = if(cfg == MatuExeUnitCfg) Some (Output(UInt(VAddrBits.W))) else None
   val mpuOut_robIdx = if(cfg == MatuExeUnitCfg) Some(Output(UInt(5.W))) else None
+  val mpuOut_canAccept = if(cfg == MatuExeUnitCfg) Some(Output(Bool())) else None
   val out = DecoupledIO(new FuOutput(len))
 
   val redirectIn = Flipped(ValidIO(new Redirect))

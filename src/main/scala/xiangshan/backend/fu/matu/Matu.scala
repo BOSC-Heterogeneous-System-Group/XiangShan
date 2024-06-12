@@ -66,6 +66,7 @@ class Matu(implicit p: Parameters) extends FunctionUnit(64, MatuExeUnitCfg) with
     io.mpuOut_uop.get <> uopReg
     io.mpuOut_pc.get := scoreboard.io.stIO.pc_out
     io.mpuOut_robIdx.get := scoreboard.io.stIO.robIdx_out
+    io.mpuOut_canAccept.get := scoreboard.io.canAccept
 
     val ex_valid_w = dontTouch(Wire(Bool()))
     val ex_OpType_w = dontTouch(Wire(FuOpType()))

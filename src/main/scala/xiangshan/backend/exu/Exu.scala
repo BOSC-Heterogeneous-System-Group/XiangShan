@@ -134,6 +134,7 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule with
   @public val mpuout_uop = if (config == MatuExeUnitCfg) Some(IO(Output(new MicroOp))) else None
   @public val mpuout_pc = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(VAddrBits.W)))) else None
   @public val mpuout_robidx = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(5.W)))) else None
+  @public val mpuout_canaccept = if (config == MatuExeUnitCfg) Some(IO(Output(Bool()))) else None
   @public val commitio_pc = if (config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(UInt(VAddrBits.W))))) else None
   @public val commitio_valid = if(config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(Bool())))) else None
   @public val commitio_robidx = if(config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(new RobPtr)))) else None

@@ -83,6 +83,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     val commitsIO = new commits_scb_io()
     val wbIn= new writeback_in()
     val flushIn = new flush_in()
+    val canAccept = Output(Bool())
   })
 
   val s_idle :: s_wait :: s_commit :: s_retire :: s_unready :: s_ready :: Nil = Enum(6) // ins state
@@ -130,9 +131,7 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
   val rd_offset_array = dontTouch(Reg(Vec(32, UInt(2.W))))
   val pc_array = dontTouch(Reg(Vec(32, UInt(VAddrBits.W))))
   val robIdx_array = dontTouch(Reg(Vec(32, new RobPtr)))
-  val cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
   val time_out_cnt_array = dontTouch(RegInit(VecInit(Seq.fill(32)(0.U(10.W)))))
-  val next_cnt_array = dontTouch(RegInit(VecInit(Seq.tabulate(32)(i => i.U(32.W)))))
   val history_ptr_array = dontTouch(RegInit(VecInit(Seq.fill(32)(0.U.asTypeOf(new ScoreboardPtr)))))
 
   val flush_w = dontTouch(Wire(Vec(32, Bool())))
@@ -160,17 +159,26 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
     state_array(i) := next_state_array(i)
   }
 
+  /** allow enqueue */
   val enqPtr = dontTouch(RegInit(0.U.asTypeOf(new ScoreboardPtr)))
   val next_enqPtr = dontTouch(Wire(new ScoreboardPtr))
   val next_enqPtr_redirect = dontTouch(Wire(new ScoreboardPtr))
   val deqPtr = dontTouch(RegInit(0.U.asTypeOf(new ScoreboardPtr)))
+
+  val allowEnqueue = RegInit(true.B)
+  val numValidEntries = distanceBetween(enqPtr, deqPtr)
+  val deqNum = state_array(deqPtr.value) === s_retire
+  allowEnqueue := numValidEntries + deqNum.asUInt  <= (MpuScoreboardSize - RenameWidth).U
+  io.canAccept := allowEnqueue
+
+  val dispatchNum = Mux(allowEnqueue, PopCount(dp_valid_w), 0.U)
   next_enqPtr_redirect.value := PriorityEncoder(first_flush_w.asUInt)
   next_enqPtr_redirect.flag := history_ptr_array(PriorityEncoder(first_flush_w.asUInt)).flag
-  next_enqPtr := Mux(flush_w.asUInt.orR, next_enqPtr_redirect + PopCount(dp_valid_w), enqPtr + PopCount(dp_valid_w))
+  next_enqPtr := Mux(flush_w.asUInt.orR, next_enqPtr_redirect + dispatchNum, enqPtr + dispatchNum)
   enqPtr := next_enqPtr
 
   val enq_offset = dontTouch(Wire(Vec(RenameWidth, UInt(6.W))))
-  val offset = (0 until RenameWidth).map(i => PopCount(dp_valid_w.take(i)))
+  val offset = (0 until RenameWidth).map(i => Mux(allowEnqueue, PopCount(dp_valid_w.take(i)), 0.U))
   enq_offset := offset
 
   /** enqueue
@@ -191,7 +199,6 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
       pc_array(enqPtr.value + enq_offset(i)) := pc_w(i)
       robIdx_array(enqPtr.value + enq_offset(i)) := robIdx_w(i)
       next_state_array(enqPtr.value + enq_offset(i)) := s_wait
-      cnt_array(enqPtr.value + enq_offset(i)) := next_cnt_array(enqPtr.value + enq_offset(i))
       history_ptr_array(enqPtr.value + enq_offset(i)) := enqPtr + enq_offset(i)
     }
   }
@@ -441,7 +448,6 @@ class Scoreboard (implicit  p: Parameters) extends XSModule with HasXSParameter 
    */
   when(state_array(deqPtr.value) === s_retire) {
     next_state_array(deqPtr.value) := s_idle
-    next_cnt_array(deqPtr.value) := cnt_array(deqPtr.value) + 32.U
     deqPtr := deqPtr + 1.U
   }
 

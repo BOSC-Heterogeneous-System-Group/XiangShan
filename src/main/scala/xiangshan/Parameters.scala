@@ -368,6 +368,7 @@ trait HasXSParameter {
   val NRPhyRegs = coreParams.NRPhyRegs
   val PhyRegIdxWidth = log2Up(NRPhyRegs)
   val RobSize = coreParams.RobSize
+  val MpuScoreboardSize = coreParams.ScoreboardSize
   val IntRefCounterWidth = log2Ceil(RobSize)
   val LoadQueueSize = coreParams.LoadQueueSize
   val LoadQueueNWriteBanks = coreParams.LoadQueueNWriteBanks

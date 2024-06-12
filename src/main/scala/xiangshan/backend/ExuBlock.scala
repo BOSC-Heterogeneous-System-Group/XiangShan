@@ -80,7 +80,8 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
     val fuWriteback = fuBlock.io.writeback.cloneType
     // from mem
     val ldIn = Vec(2, Flipped(DecoupledIO(new ExuOutput)))
-
+    // to dispatch
+    val scanAccept = Output(Bool())
     // to mem
     val stOut = ValidIO(UInt(XLEN.W))
     val suop = Output(new MicroOp)
@@ -156,6 +157,10 @@ class ExuBlockImp(outer: ExuBlock)(implicit p: Parameters) extends LazyModuleImp
 
   if (fuBlock.io.mpuOut_robIdx.isDefined) {
     io.srobIdx := fuBlock.io.mpuOut_robIdx.get
+  }
+
+  if (fuBlock.io.mpuOut_canAccept.isDefined) {
+    io.scanAccept := fuBlock.io.mpuOut_canAccept.get
   }
 
 

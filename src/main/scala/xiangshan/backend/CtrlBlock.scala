@@ -206,6 +206,8 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
     val commits_pc = Vec(CommitWidth, Output(UInt(VAddrBits.W)))
     val commits_valid = Vec(CommitWidth, Output(Bool()))
     val commits_robIdx = Vec(CommitWidth, Output(new RobPtr))
+    // to rename
+    val mpu_canAccept = Input(Bool())
     // from int block
     val exuRedirect = Vec(exuParameters.AluCnt + exuParameters.JmpCnt, Flipped(ValidIO(new ExuOutput)))
     val stIn = Vec(exuParameters.StuCnt, Flipped(ValidIO(new ExuInput)))
@@ -453,6 +455,7 @@ class CtrlBlockImp(outer: CtrlBlock)(implicit p: Parameters) extends LazyModuleI
   dispatch.io.toLsDq <> lsDq.io.enq
   dispatch.io.allocPregs <> io.allocPregs
   dispatch.io.singleStep := RegNext(io.csrCtrl.singlestep)
+  dispatch.io.mpu_canAccept := io.mpu_canAccept
 
   intDq.io.redirect <> redirectForExu
   fpDq.io.redirect <> redirectForExu

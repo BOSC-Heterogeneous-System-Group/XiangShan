@@ -279,6 +279,8 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   memBlock.io.mpuPc <> exuBlocks.head.io.spc
   memBlock.io.mpuRobIdx <> exuBlocks.head.io.srobIdx
 
+  ctrlBlock.io.mpu_canAccept <> exuBlocks.head.io.scanAccept
+
   io.cpu_halt := ctrlBlock.io.cpu_halt
 
   outer.wbArbiter.module.io.redirect <> ctrlBlock.io.redirect

@@ -253,6 +253,8 @@ class MicroOp(implicit p: Parameters) extends CfCtrl {
   def isLUI: Bool = ctrl.selImm === SelImm.IMM_U && ctrl.fuType === FuType.alu
   // This MicroOp is used to wakeup another uop (the successor: (psrc, srcType).
   def isMTEST: Bool = ctrl.fuOpType === MATUOpType.mtest && ctrl.fuOpType === FuType.matu
+  def isMMUL: Bool = ctrl.fuOpType === MATUOpType.mmul && ctrl.fuOpType === FuType.matu
+  def isMSD:  Bool = ctrl.fuOpType === LSUOpType.sd && cf.instr(6, 0) === "b0101011".U
   def wakeup(successor: Seq[(UInt, UInt)], exuCfg: ExuConfig): Seq[(Bool, Bool)] = {
     successor.map{ case (src, srcType) =>
       val pdestMatch = pdest === src

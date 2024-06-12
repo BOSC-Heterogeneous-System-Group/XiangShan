@@ -70,6 +70,8 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val mpuOut_uop = if (numMatu > 0) Some(Output(new MicroOp)) else None
     val mpuOut_pc = if (numMatu > 0) Some(Output(UInt(VAddrBits.W))) else None
     val mpuOut_robIdx = if (numMatu > 0) Some(Output(UInt(5.W))) else None
+    // to dispatch
+    val mpuOut_canAccept = if (numMatu > 0) Some(Output(Bool())) else None
     // from rob
     val commitsIn_pc = if (numMatu > 0) Some(Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
     val commitsIn_valid = if(numMatu > 0) Some(Vec(CommitWidth, Input(Bool()))) else None
@@ -166,6 +168,13 @@ class FUBlock(configs: Seq[(ExuConfig, Int)])(implicit p: Parameters) extends XS
     val filteredPort = exeUnits.map(_.mpuout_robidx).filter(_.isDefined).map(_.get)
     if (filteredPort.nonEmpty) {
       io.mpuOut_robIdx.get := filteredPort.head
+    }
+  }
+
+  if (io.mpuOut_canAccept.isDefined) {
+    val filteredPort = exeUnits.map(_.mpuout_canaccept).filter(_.isDefined).map(_.get)
+    if (filteredPort.nonEmpty) {
+      io.mpuOut_canAccept.get := filteredPort.head
     }
   }
 
