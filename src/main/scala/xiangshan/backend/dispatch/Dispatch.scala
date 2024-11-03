@@ -63,11 +63,14 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
       val needAlloc = Vec(RenameWidth, Output(Bool()))
       val req = Vec(RenameWidth, ValidIO(new MicroOp))
     }
+    val mpu_canAccept = Input(Bool())
+    val toMpuDq = Vec(RenameWidth, ValidIO(new MicroOp))
     val redirect = Flipped(ValidIO(new Redirect))
     // singleStep
     val singleStep = Input(Bool())
     // lfst
     val lfst = new DispatchLFSTIO
+    val dpOut = Vec(RenameWidth, ValidIO(new MicroOp))
   })
 
   /**
@@ -105,6 +108,13 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
   val updatedCommitType = Wire(Vec(RenameWidth, CommitType()))
 
   for (i <- 0 until RenameWidth) {
+    io.dpOut(i).bits := updatedUop(i)
+    io.dpOut(i).valid := io.fromRename(i).valid
+  }
+
+
+
+  for (i <- 0 until RenameWidth) {
     updatedCommitType(i) := Cat(isLs(i), (isStore(i) && !isAMO(i)) | isBranch(i))
 
     updatedUop(i) := io.fromRename(i).bits
@@ -119,6 +129,12 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
     when (io.fromRename(i).bits.isLUI) {
       updatedUop(i).psrc(0) := 0.U
     }
+
+    when (io.fromRename(i).bits.isMTEST) {
+      updatedUop(i).psrc(0) := 0.U
+      updatedUop(i).psrc(1) := 0.U
+    }
+
 
     io.lfst.req(i).valid := io.fromRename(i).fire() && updatedUop(i).cf.storeSetHit
     io.lfst.req(i).bits.isstore := isStore(i)
@@ -160,7 +176,7 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
     *   acquire ROB (all), LSQ (load/store only) and dispatch queue slots
     *   only set valid when all of them provides enough entries
     */
-  val allResourceReady = io.enqRob.canAccept && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept
+  val allResourceReady = io.enqRob.canAccept && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept && io.mpu_canAccept
 
   // Instructions should enter dispatch queues in order.
   // thisIsBlocked: this instruction is blocked by itself (based on noSpecExec)
@@ -194,13 +210,13 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
   // input for ROB, LSQ, Dispatch Queue
   for (i <- 0 until RenameWidth) {
     io.enqRob.needAlloc(i) := io.fromRename(i).valid
-    io.enqRob.req(i).valid := io.fromRename(i).valid && thisCanActualOut(i) && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept
+    io.enqRob.req(i).valid := io.fromRename(i).valid && thisCanActualOut(i) && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept && io.mpu_canAccept
     io.enqRob.req(i).bits := updatedUop(i)
     XSDebug(io.enqRob.req(i).valid, p"pc 0x${Hexadecimal(io.fromRename(i).bits.cf.pc)} receives nrob ${io.enqRob.resp(i)}\n")
 
     // When previous instructions have exceptions, following instructions should not enter dispatch queues.
     val previousHasException = if (i == 0) false.B else VecInit(hasValidException.take(i)).asUInt.orR
-    val canEnterDpq = !hasException(i) && thisCanActualOut(i) && !previousHasException && io.enqRob.canAccept
+    val canEnterDpq = !hasException(i) && thisCanActualOut(i) && !previousHasException && io.enqRob.canAccept && io.mpu_canAccept
 
     // send uops to dispatch queues
     // Note that if one of their previous instructions cannot enqueue, they should not enter dispatch queue.
@@ -220,6 +236,10 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
                                canEnterDpq && io.toIntDq.canAccept && io.toFpDq.canAccept
     io.toLsDq.req(i).bits   := updatedUop(i)
 
+    io.toMpuDq(i).bits      := updatedUop(i)
+    io.toMpuDq(i).valid     := io.fromRename(i).valid && canEnterDpq && io.toIntDq.canAccept &&
+                               io.toFpDq.canAccept && io.toLsDq.canAccept
+
     XSDebug(io.toIntDq.req(i).valid, p"pc 0x${Hexadecimal(io.toIntDq.req(i).bits.cf.pc)} int index $i\n")
     XSDebug(io.toFpDq.req(i).valid , p"pc 0x${Hexadecimal(io.toFpDq.req(i).bits.cf.pc )} fp  index $i\n")
     XSDebug(io.toLsDq.req(i).valid , p"pc 0x${Hexadecimal(io.toLsDq.req(i).bits.cf.pc )} ls  index $i\n")
@@ -231,8 +251,8 @@ class Dispatch(implicit p: Parameters) extends XSModule with HasPerfEvents {
   val hasValidInstr = VecInit(io.fromRename.map(_.valid)).asUInt.orR
   val hasSpecialInstr = Cat((0 until RenameWidth).map(i => io.fromRename(i).valid && (isBlockBackward(i) || isNoSpecExec(i)))).orR
   for (i <- 0 until RenameWidth) {
-    io.recv(i) := thisCanActualOut(i) && io.enqRob.canAccept && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept
-    io.fromRename(i).ready := !hasValidInstr || !hasSpecialInstr && io.enqRob.canAccept && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept
+    io.recv(i) := thisCanActualOut(i) && io.enqRob.canAccept && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept && io.mpu_canAccept
+    io.fromRename(i).ready := !hasValidInstr || !hasSpecialInstr && io.enqRob.canAccept && io.toIntDq.canAccept && io.toFpDq.canAccept && io.toLsDq.canAccept && io.mpu_canAccept
 
     XSInfo(io.recv(i) && io.fromRename(i).valid,
       p"pc 0x${Hexadecimal(io.fromRename(i).bits.cf.pc)}, type(${isInt(i)}, ${isFp(i)}, ${isLs(i)}), " +

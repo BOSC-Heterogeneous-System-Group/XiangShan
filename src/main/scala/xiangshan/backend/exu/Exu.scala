@@ -1,18 +1,18 @@
 /***************************************************************************************
-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-* Copyright (c) 2020-2021 Peng Cheng Laboratory
-*
-* XiangShan is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
+ * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+ * Copyright (c) 2020-2021 Peng Cheng Laboratory
+ *
+ * XiangShan is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ ***************************************************************************************/
 
 package xiangshan.backend.exu
 
@@ -24,6 +24,8 @@ import utils.XSPerfAccumulate
 import xiangshan._
 import xiangshan.backend.fu._
 import xiangshan.backend.fu.fpu.FMAMidResultIO
+import xiangshan.backend.rob._
+//import xiangshan.backend.fu.matu.ldIO
 
 case class ExuParameters
 (
@@ -35,11 +37,12 @@ case class ExuParameters
   FmiscCnt: Int,
   FmiscDivSqrtCnt: Int,
   LduCnt: Int,
-  StuCnt: Int
+  StuCnt: Int,
+  MatuCnt: Int,
 ) {
   assert(JmpCnt == 1, "Only support 1 JmpUnit now!")
 
-  def IntExuCnt = AluCnt + MulCnt + MduCnt + JmpCnt
+  def IntExuCnt = AluCnt + MulCnt + MduCnt + JmpCnt + MatuCnt
 
   def FpExuCnt = FmacCnt + FmiscCnt + FmiscDivSqrtCnt
 
@@ -110,7 +113,7 @@ case class ExuConfig
 }
 
 @instantiable
-abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule {
+abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule with HasXSParameter{
   @public val config = cfg
 
   @public val io = IO(new Bundle() {
@@ -124,6 +127,17 @@ abstract class Exu(cfg: ExuConfig)(implicit p: Parameters) extends XSModule {
   @public val fenceio = if (config == JumpCSRExeUnitCfg) Some(IO(new FenceIO)) else None
   @public val frm = if (config == FmacExeUnitCfg || config == FmiscExeUnitCfg) Some(IO(Input(UInt(3.W)))) else None
   @public val fmaMid = if (config == FmacExeUnitCfg) Some(IO(new FMAMidResultIO)) else None
+  @public val ldio = if (config == MatuExeUnitCfg) Some(IO(Vec(2, Flipped(DecoupledIO(new ExuOutput))))) else None
+  @public val dp_uop_in = if (config == MatuExeUnitCfg) Some(IO(Vec(RenameWidth, Flipped(ValidIO(new MicroOp))))) else None
+  @public val mpuout_data = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(XLEN.W)))) else None
+  @public val mpuout_valid = if (config == MatuExeUnitCfg) Some(IO(Output(Bool()))) else None
+  @public val mpuout_uop = if (config == MatuExeUnitCfg) Some(IO(Output(new MicroOp))) else None
+  @public val mpuout_pc = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(VAddrBits.W)))) else None
+  @public val mpuout_robidx = if (config == MatuExeUnitCfg) Some(IO(Output(UInt(5.W)))) else None
+  @public val mpuout_canaccept = if (config == MatuExeUnitCfg) Some(IO(Output(Bool()))) else None
+  @public val commitio_pc = if (config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(UInt(VAddrBits.W))))) else None
+  @public val commitio_valid = if(config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(Bool())))) else None
+  @public val commitio_robidx = if(config == MatuExeUnitCfg) Some(IO(Vec(CommitWidth, Input(new RobPtr)))) else None
 
   val functionUnits = config.fuConfigs.map(cfg => {
     val mod = Module(cfg.fuGen(p))

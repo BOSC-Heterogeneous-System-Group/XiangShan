@@ -1,18 +1,18 @@
 /***************************************************************************************
-* Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
-* Copyright (c) 2020-2021 Peng Cheng Laboratory
-*
-* XiangShan is licensed under Mulan PSL v2.
-* You can use this software according to the terms and conditions of the Mulan PSL v2.
-* You may obtain a copy of Mulan PSL v2 at:
-*          http://license.coscl.org.cn/MulanPSL2
-*
-* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
-* EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
-* MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
-*
-* See the Mulan PSL v2 for more details.
-***************************************************************************************/
+ * Copyright (c) 2020-2021 Institute of Computing Technology, Chinese Academy of Sciences
+ * Copyright (c) 2020-2021 Peng Cheng Laboratory
+ *
+ * XiangShan is licensed under Mulan PSL v2.
+ * You can use this software according to the terms and conditions of the Mulan PSL v2.
+ * You may obtain a copy of Mulan PSL v2 at:
+ *          http://license.coscl.org.cn/MulanPSL2
+ *
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ *
+ * See the Mulan PSL v2 for more details.
+ ***************************************************************************************/
 
 package xiangshan.backend.fu
 
@@ -21,7 +21,9 @@ import chisel3._
 import chisel3.util._
 import utils.XSPerfAccumulate
 import xiangshan._
+import xiangshan.backend.exu.ExuConfig
 import xiangshan.backend.fu.fpu._
+import xiangshan.backend.rob._
 
 trait HasFuLatency {
   val latencyVal: Option[Int]
@@ -72,17 +74,27 @@ class FunctionUnitInput(val len: Int)(implicit p: Parameters) extends XSBundle {
   val uop = new MicroOp
 }
 
-class FunctionUnitIO(val len: Int)(implicit p: Parameters) extends XSBundle {
+class FunctionUnitIO(val len: Int, cfg: ExuConfig)(implicit p: Parameters) extends XSBundle with HasXSParameter{
   val in = Flipped(DecoupledIO(new FunctionUnitInput(len)))
-
+  val ldIn = if (cfg == MatuExeUnitCfg) Some (Vec(2,  Flipped(DecoupledIO(new ExuOutput)))) else None
+  val dpUopIn = if (cfg == MatuExeUnitCfg) Some (Vec(RenameWidth, Flipped(ValidIO(new MicroOp)))) else None
+  val commitIn_pc = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(UInt(VAddrBits.W)))) else None
+  val commitIn_valid = if (cfg == MatuExeUnitCfg) Some (Vec(CommitWidth, Input(Bool()))) else None
+  val commitIn_robIdx = if (cfg == MatuExeUnitCfg) Some(Vec(CommitWidth, Input(new RobPtr))) else None
+  val mpuOut_data = if(cfg == MatuExeUnitCfg) Some (Output(UInt(XLEN.W))) else None
+  val mpuOut_uop = if (cfg == MatuExeUnitCfg) Some (Output(new MicroOp)) else None
+  val mpuOut_valid = if(cfg == MatuExeUnitCfg) Some (Output(Bool())) else None
+  val mpuOut_pc = if(cfg == MatuExeUnitCfg) Some (Output(UInt(VAddrBits.W))) else None
+  val mpuOut_robIdx = if(cfg == MatuExeUnitCfg) Some(Output(UInt(5.W))) else None
+  val mpuOut_canAccept = if(cfg == MatuExeUnitCfg) Some(Output(Bool())) else None
   val out = DecoupledIO(new FuOutput(len))
 
   val redirectIn = Flipped(ValidIO(new Redirect))
 }
 
-abstract class FunctionUnit(len: Int = 64)(implicit p: Parameters) extends XSModule {
-
-  val io = IO(new FunctionUnitIO(len))
+abstract class FunctionUnit(len: Int = 64, cfg: ExuConfig)(implicit p: Parameters) extends XSModule {
+  val config = cfg
+  val io = IO(new FunctionUnitIO(len, config))
 
   XSPerfAccumulate("in_valid", io.in.valid)
   XSPerfAccumulate("in_fire", io.in.fire)
@@ -91,7 +103,7 @@ abstract class FunctionUnit(len: Int = 64)(implicit p: Parameters) extends XSMod
 
 }
 
-abstract class FUWithRedirect(len: Int = 64)(implicit p: Parameters) extends FunctionUnit(len: Int) with HasRedirectOut
+abstract class FUWithRedirect(len: Int = 64)(implicit p: Parameters) extends FunctionUnit(len: Int, AluExeUnitCfg) with HasRedirectOut
 
 trait HasPipelineReg {
   this: FunctionUnit =>
